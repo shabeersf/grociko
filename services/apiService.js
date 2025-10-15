@@ -1,5 +1,5 @@
-import { API_CONFIG, logApiRequest, logApiResponse } from '@/config/api';
-import * as SecureStore from 'expo-secure-store';
+import { API_CONFIG, logApiRequest, logApiResponse } from "@/config/api";
+import * as SecureStore from "expo-secure-store";
 
 /**
  * API Service for Grociko App
@@ -8,9 +8,9 @@ import * as SecureStore from 'expo-secure-store';
 
 // SecureStore Keys
 const STORAGE_KEYS = {
-  USER_DATA: 'grociko_user_data',
-  JWT_TOKEN: 'grociko_jwt_token',
-  USER_ID: 'grociko_user_id',
+  USER_DATA: "grociko_user_data",
+  JWT_TOKEN: "grociko_jwt_token",
+  USER_ID: "grociko_user_id",
 };
 
 /**
@@ -27,12 +27,12 @@ const getBasicAuthHeader = () => {
  */
 const createHeaders = (isFormData = false) => {
   const headers = {
-    'Authorization': getBasicAuthHeader(),
+    Authorization: getBasicAuthHeader(),
   };
 
   if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
-    headers['Accept'] = 'application/json';
+    headers["Content-Type"] = "application/json";
+    headers["Accept"] = "application/json";
   }
 
   return headers;
@@ -48,7 +48,7 @@ const handleApiError = (error, endpoint) => {
     // Server responded with error status
     return {
       success: false,
-      error: error.response.data?.message || 'Server error occurred',
+      error: error.response.data?.message || "Server error occurred",
       statusCode: error.response.status,
       data: error.response.data,
     };
@@ -56,14 +56,14 @@ const handleApiError = (error, endpoint) => {
     // Request made but no response
     return {
       success: false,
-      error: 'No response from server. Please check your internet connection.',
+      error: "No response from server. Please check your internet connection.",
       statusCode: 0,
     };
   } else {
     // Something else happened
     return {
       success: false,
-      error: error.message || 'An unexpected error occurred',
+      error: error.message || "An unexpected error occurred",
       statusCode: 0,
     };
   }
@@ -75,7 +75,7 @@ const handleApiError = (error, endpoint) => {
 const makeRequest = async (endpoint, options = {}) => {
   try {
     const url = `${API_CONFIG.BASE_URL}${endpoint}`;
-    logApiRequest(options.method || 'GET', url, options.body);
+    logApiRequest(options.method || "GET", url, options.body);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
@@ -95,10 +95,14 @@ const makeRequest = async (endpoint, options = {}) => {
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('Response is not valid JSON:', responseText.substring(0, 200));
+      console.error(
+        "Response is not valid JSON:",
+        responseText.substring(0, 200)
+      );
       return {
         success: false,
-        error: 'Server returned an invalid response. This might be an authentication issue.',
+        error:
+          "Server returned an invalid response. This might be an authentication issue.",
         statusCode: response.status,
         rawResponse: responseText.substring(0, 500),
       };
@@ -121,10 +125,10 @@ const makeRequest = async (endpoint, options = {}) => {
       statusCode: response.status,
     };
   } catch (error) {
-    if (error.name === 'AbortError') {
+    if (error.name === "AbortError") {
       return {
         success: false,
-        error: 'Request timeout. Please try again.',
+        error: "Request timeout. Please try again.",
         statusCode: 408,
       };
     }
@@ -137,7 +141,10 @@ const makeRequest = async (endpoint, options = {}) => {
  */
 export const saveUserData = async (userData, jwt = null) => {
   try {
-    await SecureStore.setItemAsync(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+    await SecureStore.setItemAsync(
+      STORAGE_KEYS.USER_DATA,
+      JSON.stringify(userData)
+    );
 
     // Save JWT token - either from userData or passed separately
     const token = jwt || userData.jwt;
@@ -146,13 +153,16 @@ export const saveUserData = async (userData, jwt = null) => {
     }
 
     if (userData.id) {
-      await SecureStore.setItemAsync(STORAGE_KEYS.USER_ID, userData.id.toString());
+      await SecureStore.setItemAsync(
+        STORAGE_KEYS.USER_ID,
+        userData.id.toString()
+      );
     }
 
-    console.log('✅ User data saved to SecureStore');
+    console.log("✅ User data saved to SecureStore");
     return { success: true };
   } catch (error) {
-    console.error('❌ Error saving user data:', error);
+    console.error("❌ Error saving user data:", error);
     return { success: false, error: error.message };
   }
 };
@@ -165,7 +175,7 @@ export const getUserData = async () => {
     const userData = await SecureStore.getItemAsync(STORAGE_KEYS.USER_DATA);
     return userData ? JSON.parse(userData) : null;
   } catch (error) {
-    console.error('Error getting user data:', error);
+    console.error("Error getting user data:", error);
     return null;
   }
 };
@@ -177,7 +187,7 @@ export const getJwtToken = async () => {
   try {
     return await SecureStore.getItemAsync(STORAGE_KEYS.JWT_TOKEN);
   } catch (error) {
-    console.error('Error getting JWT token:', error);
+    console.error("Error getting JWT token:", error);
     return null;
   }
 };
@@ -192,7 +202,7 @@ export const clearUserData = async () => {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.USER_ID);
     return { success: true };
   } catch (error) {
-    console.error('Error clearing user data:', error);
+    console.error("Error clearing user data:", error);
     return { success: false, error: error.message };
   }
 };
@@ -214,20 +224,23 @@ export const signupUser = async (formData) => {
     // For FormData, we only need Authorization header
     // Don't set Content-Type - let the browser/fetch set it with boundary
     const headers = {
-      'Authorization': getBasicAuthHeader(),
-      'Accept': 'application/json',
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
     };
 
-    console.log('📤 Signup Request Headers:', headers);
-    console.log('📤 FormData keys:', Array.from(formData._parts || []).map(([key]) => key));
+    console.log("📤 Signup Request Headers:", headers);
+    console.log(
+      "📤 FormData keys:",
+      Array.from(formData._parts || []).map(([key]) => key)
+    );
 
-    const response = await makeRequest('/sign-up.php', {
-      method: 'POST',
+    const response = await makeRequest("/sign-up.php", {
+      method: "POST",
       headers,
       body: formData,
     });
 
-    console.log('📥 Signup Response:', {
+    console.log("📥 Signup Response:", {
       success: response.success,
       statusCode: response.statusCode,
       hasData: !!response.data,
@@ -243,18 +256,21 @@ export const signupUser = async (formData) => {
         success: true,
         data: response.data.data,
         jwt: jwt,
-        message: 'Account created successfully!',
+        message: "Account created successfully!",
       };
     } else {
       return {
         success: false,
-        error: response.data?.data?.err?.join(', ') || response.error || 'Signup failed',
+        error:
+          response.data?.data?.err?.join(", ") ||
+          response.error ||
+          "Signup failed",
         errors: response.data?.data?.err || [],
       };
     }
   } catch (error) {
-    console.error('❌ Signup Error:', error);
-    return handleApiError(error, '/sign-up.php');
+    console.error("❌ Signup Error:", error);
+    return handleApiError(error, "/sign-up.php");
   }
 };
 
@@ -264,27 +280,35 @@ export const signupUser = async (formData) => {
  */
 export const loginUser = async (loginPayload) => {
   try {
+    // Create FormData for login (PHP expects POST data)
+    const formData = new FormData();
+    formData.append("email", loginPayload.email || "");
+    formData.append("phone", loginPayload.phone || "");
+    formData.append("password", loginPayload.password || "");
+
+    console.log("🔐 Login Request:", {
+      email: loginPayload.email || "(empty)",
+      phone: loginPayload.phone || "(empty)",
+      hasPassword: !!loginPayload.password,
+    });
+
     const headers = {
-      'Authorization': getBasicAuthHeader(),
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+      // Don't set Content-Type for FormData - browser will set it with boundary
     };
 
-    console.log('🔐 Login Request:', {
-      hasEmail: !!loginPayload.email,
-      hasPhone: !!loginPayload.phone,
-    });
-
-    const response = await makeRequest('/login.php', {
-      method: 'POST',
+    const response = await makeRequest("/login.php", {
+      method: "POST",
       headers,
-      body: JSON.stringify(loginPayload),
+      body: formData,
     });
 
-    console.log('📥 Login Response:', {
+    console.log("📥 Login Response:", {
       success: response.success,
       statusCode: response.statusCode,
       responseCode: response.data?.response_code,
+      status: response.data?.status,
     });
 
     if (response.success && response.data?.response_code === 200) {
@@ -296,25 +320,27 @@ export const loginUser = async (loginPayload) => {
         success: true,
         data: response.data.data,
         jwt: jwt,
-        message: 'Login successful!',
+        message: "Login successful!",
       };
     } else if (response.data?.response_code === 220) {
       // No result found - invalid credentials
       return {
         success: false,
-        error: response.data?.message || 'Invalid email/phone or password',
+        error: response.data?.message || "Invalid email/phone or password",
       };
     } else {
       return {
         success: false,
-        error: response.data?.message || response.error || 'Login failed',
+        error: response.data?.message || response.error || "Login failed",
       };
     }
   } catch (error) {
-    console.error('❌ Login Error:', error);
-    return handleApiError(error, '/login.php');
+    console.error("❌ Login Error:", error);
+    return handleApiError(error, "/login.php");
   }
 };
+
+
 
 /**
  * Create FormData from signup form
@@ -323,20 +349,20 @@ export const createSignupFormData = (formValues, imageUri) => {
   const formData = new FormData();
 
   // Add text fields
-  formData.append('name', formValues.name || '');
-  formData.append('phone', formValues.phone || '');
-  formData.append('email', formValues.email || '');
-  formData.append('username', formValues.username || '');
-  formData.append('password', formValues.password || '');
-  formData.append('c_password', formValues.c_password || '');
+  formData.append("name", formValues.name || "");
+  formData.append("phone", formValues.phone || "");
+  formData.append("email", formValues.email || "");
+  formData.append("username", formValues.username || "");
+  formData.append("password", formValues.password || "");
+  formData.append("c_password", formValues.c_password || "");
 
   // Add image if provided
   if (imageUri) {
-    const filename = imageUri.split('/').pop();
+    const filename = imageUri.split("/").pop();
     const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
+    const type = match ? `image/${match[1]}` : "image/jpeg";
 
-    formData.append('photo', {
+    formData.append("photo", {
       uri: imageUri,
       name: filename,
       type,
@@ -349,7 +375,7 @@ export const createSignupFormData = (formValues, imageUri) => {
 /**
  * Get user profile image URL
  */
-export const getUserImageUrl = (imageName, size = 'medium') => {
+export const getUserImageUrl = (imageName, size = "medium") => {
   if (!imageName) return null;
 
   const sizeUrls = {
@@ -366,16 +392,16 @@ export const getUserImageUrl = (imageName, size = 'medium') => {
  */
 export const validateImageFile = (fileInfo) => {
   const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+  const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png"];
 
   const errors = [];
 
   if (fileInfo.fileSize && fileInfo.fileSize > MAX_SIZE) {
-    errors.push('Image size must be less than 5MB');
+    errors.push("Image size must be less than 5MB");
   }
 
   if (fileInfo.mimeType && !ALLOWED_TYPES.includes(fileInfo.mimeType)) {
-    errors.push('Only JPEG and PNG images are allowed');
+    errors.push("Only JPEG and PNG images are allowed");
   }
 
   return {
@@ -385,23 +411,185 @@ export const validateImageFile = (fileInfo) => {
 };
 
 /**
+ * Get Mobile Sliders/Banners
+ */
+export const getMobileSliders = async (cat_id = "") => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    const url = cat_id
+      ? `/get-mobile-slider.php?cat_id=${cat_id}`
+      : "/get-mobile-slider.php";
+
+    console.log("🎨 Fetching sliders");
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch sliders",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Sliders Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Get Categories
+ */
+export const getCategories = async (status = "active") => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    const url = "/get-category.php";
+
+    console.log("📁 Fetching categories");
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch categories",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Categories Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Get Brands
+ */
+export const getBrands = async (status = "active") => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    const url = status ? `/get-brand.php?status=${status}` : "/get-brand.php";
+
+    console.log("🏷️ Fetching brands");
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch brands",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Brands Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Get Products with Filters
+ */
+export const getProducts = async (filters = {}) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    // Build query string from filters
+    const queryParams = new URLSearchParams();
+    if (filters.id) queryParams.append("id", filters.id);
+    if (filters.name) queryParams.append("name", filters.name);
+    if (filters.cat_id) queryParams.append("cat_id", filters.cat_id);
+    if (filters.sub_id) queryParams.append("sub_id", filters.sub_id);
+    if (filters.status) queryParams.append("status", filters.status);
+    if (filters.featured) queryParams.append("featured", filters.featured);
+
+    const queryString = queryParams.toString();
+    const url = queryString
+      ? `/get-product.php?${queryString}`
+      : "/get-product.php";
+
+    console.log("📦 Fetching products with filters:", filters);
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch products",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Products Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
  * Get Product Details by ID
  */
 export const getProductById = async (productId) => {
   try {
     const headers = {
-      'Authorization': getBasicAuthHeader(),
-      'Accept': 'application/json',
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
     };
 
-    console.log('📦 Fetching product:', productId);
+    console.log("📦 Fetching product:", productId);
 
     const response = await makeRequest(`/get-product.php?id=${productId}`, {
-      method: 'GET',
+      method: "GET",
       headers,
     });
 
-    console.log('📥 Product Response:', {
+    console.log("📥 Product Response:", {
       success: response.success,
       statusCode: response.statusCode,
       hasData: !!response.data,
@@ -409,9 +597,10 @@ export const getProductById = async (productId) => {
 
     if (response.success && response.data?.response_code === 200) {
       // Return the first product from the array
-      const productData = response.data.data && response.data.data.length > 0
-        ? response.data.data[0]
-        : null;
+      const productData =
+        response.data.data && response.data.data.length > 0
+          ? response.data.data[0]
+          : null;
 
       if (productData) {
         return {
@@ -421,23 +610,23 @@ export const getProductById = async (productId) => {
       } else {
         return {
           success: false,
-          error: 'Product not found',
+          error: "Product not found",
         };
       }
     } else if (response.data?.response_code === 220) {
       return {
         success: false,
-        error: 'Product not found',
+        error: "Product not found",
       };
     } else {
       return {
         success: false,
-        error: response.error || 'Failed to fetch product',
+        error: response.error || "Failed to fetch product",
       };
     }
   } catch (error) {
-    console.error('❌ Product Fetch Error:', error);
-    return handleApiError(error, '/get-product.php');
+    console.error("❌ Product Fetch Error:", error);
+    return handleApiError(error, "/get-product.php");
   }
 };
 

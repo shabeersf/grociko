@@ -1,10 +1,13 @@
 import BannerCarousel from "@/components/BannerCarousel";
 import ProductCard from "@/components/ProductCard";
 import SafeAreaWrapper from "@/components/SafeAreaWrapper";
+import { getBrands, getCategories, getMobileSliders, getProducts } from "@/services/apiService";
 import theme from "@/utils/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   ScrollView,
@@ -15,293 +18,152 @@ import {
 } from "react-native";
 
 const Home = () => {
+  // State for dynamic data
+  const [bannerData, setBannerData] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [exclusiveOffers, setExclusiveOffers] = useState([]);
+  const [bestSelling, setBestSelling] = useState([]);
+  const [meatProducts, setMeatProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Banner data using local slider images
-  const bannerData = [
-    {
-      id: 1,
-      title: "Fresh Vegetables",
-      subtitle: "Get Up To 40% OFF",
-      image: require("../../assets/images/slider/slider_1.png"),
-      backgroundColor: theme.colors.category.fruits.background,
-    },
-    {
-      id: 2,
-      title: "Organic Fruits",
-      subtitle: "Fresh & Healthy 30% OFF",
-      image: require("../../assets/images/slider/slider_2.png"),
-      backgroundColor: theme.colors.category.dairy.background,
-    },
-    {
-      id: 3,
-      title: "Daily Essentials",
-      subtitle: "Save 25% Today",
-      image: require("../../assets/images/slider/slider_3.png"),
-      backgroundColor: theme.colors.category.beverages.background,
-    },
-  ];
+  // Color mapping for categories (fallback to theme colors)
+  const categoryColorMap = {
+    'fruits': { bg: theme.colors.category.fruits.background, border: theme.colors.category.fruits.border },
+    'vegetable': { bg: theme.colors.category.fruits.background, border: theme.colors.category.fruits.border },
+    'oil': { bg: theme.colors.category.oil.background, border: theme.colors.category.oil.border },
+    'meat': { bg: theme.colors.category.meat.background, border: theme.colors.category.meat.border },
+    'fish': { bg: theme.colors.category.meat.background, border: theme.colors.category.meat.border },
+    'bakery': { bg: theme.colors.category.bakery.background, border: theme.colors.category.bakery.border },
+    'snacks': { bg: theme.colors.category.bakery.background, border: theme.colors.category.bakery.border },
+    'dairy': { bg: theme.colors.category.dairy.background, border: theme.colors.category.dairy.border },
+    'eggs': { bg: theme.colors.category.dairy.background, border: theme.colors.category.dairy.border },
+    'beverages': { bg: theme.colors.category.beverages.background, border: theme.colors.category.beverages.border },
+  };
 
-  const exclusiveOffers = [
-    {
-      id: 1,
-      name: "Organic Bananas",
-      unit: "7pcs, Price per kg",
-      mrp: 5.99,
-      sellingPrice: 4.99,
-      image: require("../../assets/images/products/large/01.png"),
-      category: "fruits",
-    },
-    {
-      id: 2,
-      name: "Red Apple",
-      unit: "1kg, Price per kg",
-      mrp: 6.49,
-      sellingPrice: 4.99,
-      image: require("../../assets/images/products/large/02.png"),
-      category: "fruits",
-    },
-    {
-      id: 3,
-      name: "Fresh Avocado",
-      unit: "2pcs, Price per pack",
-      mrp: 7.99,
-      sellingPrice: 6.49,
-      image: require("../../assets/images/products/large/03.png"),
-      category: "fruits",
-    },
-    {
-      id: 4,
-      name: "Organic Lemon",
-      unit: "500g, Price per pack",
-      mrp: 3.49,
-      sellingPrice: 2.99,
-      image: require("../../assets/images/products/large/04.png"),
-      category: "fruits",
-    },
-    {
-      id: 5,
-      name: "Sweet Orange",
-      unit: "1kg, Price per kg",
-      mrp: 5.49,
-      sellingPrice: 4.49,
-      image: require("../../assets/images/products/large/02.png"),
-      category: "fruits",
-    },
-  ];
+  const getCategoryColors = (categoryName) => {
+    const lowerName = categoryName?.toLowerCase() || '';
+    for (const [key, colors] of Object.entries(categoryColorMap)) {
+      if (lowerName.includes(key)) {
+        return colors;
+      }
+    }
+    return { bg: '#FFF8E1', border: '#FFD54F' }; // Default colors
+  };
 
-  const bestSelling = [
-    {
-      id: 6,
-      name: "Bell Pepper Red",
-      unit: "1kg, Price per kg",
-      mrp: 6.99,
-      sellingPrice: 4.99,
-      image: require("../../assets/images/products/large/03.png"),
-      category: "vegetables",
-    },
-    {
-      id: 7,
-      name: "Ginger",
-      unit: "250gm, Price per 250g",
-      mrp: 5.49,
-      sellingPrice: 3.99,
-      image: require("../../assets/images/products/large/04.png"),
-      category: "vegetables",
-    },
-    {
-      id: 8,
-      name: "Fresh Tomatoes",
-      unit: "1kg, Price per kg",
-      mrp: 4.99,
-      sellingPrice: 3.49,
-      image: require("../../assets/images/products/large/01.png"),
-      category: "vegetables",
-    },
-    {
-      id: 9,
-      name: "Green Cucumber",
-      unit: "500g, Price per pack",
-      mrp: 3.99,
-      sellingPrice: 2.99,
-      image: require("../../assets/images/products/large/02.png"),
-      category: "vegetables",
-    },
-    {
-      id: 10,
-      name: "Fresh Spinach",
-      unit: "250g, Price per bunch",
-      mrp: 2.99,
-      sellingPrice: 2.49,
-      image: require("../../assets/images/products/large/03.png"),
-      category: "vegetables",
-    },
-    {
-      id: 11,
-      name: "White Onions",
-      unit: "1kg, Price per kg",
-      mrp: 3.49,
-      sellingPrice: 2.99,
-      image: require("../../assets/images/products/large/04.png"),
-      category: "vegetables",
-    },
-  ];
+  // Fetch all data on mount
+  useEffect(() => {
+    fetchHomeData();
+  }, []);
 
-  const categories = [
-    {
-      id: 1,
-      name: "Fresh Fruits & Vegetable",
-      backgroundColor: theme.colors.category.fruits.background,
-      borderColor: theme.colors.category.fruits.border,
-      image: require("../../assets/images/category/vegetables.png"),
-      cat_id: 'fruits_vegetables',
-    },
-    {
-      id: 2,
-      name: "Cooking Oil & Ghee",
-      backgroundColor: theme.colors.category.oil.background,
-      borderColor: theme.colors.category.oil.border,
-      image: require("../../assets/images/category/staples.png"),
-      cat_id: 'cooking_oil_ghee',
-    },
-    {
-      id: 3,
-      name: "Meat & Fish",
-      backgroundColor: theme.colors.category.meat.background,
-      borderColor: theme.colors.category.meat.border,
-      image: require("../../assets/images/category/fish_and_meat.png"),
-      cat_id: 'meat_fish',
-    },
-    {
-      id: 4,
-      name: "Bakery & Snacks",
-      backgroundColor: theme.colors.category.bakery.background,
-      borderColor: theme.colors.category.bakery.border,
-      image: require("../../assets/images/category/snacks.png"),
-      cat_id: 'bakery_snacks',
-    },
-    {
-      id: 5,
-      name: "Dairy & Eggs",
-      backgroundColor: theme.colors.category.dairy.background,
-      borderColor: theme.colors.category.dairy.border,
-      image: require("../../assets/images/category/diary-bakery.png"),
-      cat_id: 'dairy_eggs',
-    },
-    {
-      id: 6,
-      name: "Beverages",
-      backgroundColor: theme.colors.category.beverages.background,
-      borderColor: theme.colors.category.beverages.border,
-      image: require("../../assets/images/category/snacks.png"),
-      cat_id: 'beverages',
-    },
-    {
-      id: 7,
-      name: "Personal Care",
-      backgroundColor: "#FFF8E1",
-      borderColor: "#FFD54F",
-      image: require("../../assets/images/category/personal-care.png"),
-      cat_id: 'personal_care',
-    },
-    {
-      id: 8,
-      name: "Baby Care",
-      backgroundColor: "#F0E8FF",
-      borderColor: "#9C6ADE",
-      image: require("../../assets/images/category/baby-care.png"),
-      cat_id: 'baby_care',
-    },
-  ];
+  const fetchHomeData = async () => {
+    try {
+      setLoading(true);
 
-  const meatProducts = [
-    {
-      id: 12,
-      name: "Beef Bone",
-      unit: "1kg, Price per kg",
-      mrp: 12.99,
-      sellingPrice: 9.99,
-      image: require("../../assets/images/products/large/07.png"),
-      category: "meat",
-    },
-    {
-      id: 13,
-      name: "Broiler Chicken",
-      unit: "1kg, Price per kg",
-      mrp: 8.99,
-      sellingPrice: 6.99,
-      image: require("../../assets/images/products/large/08.png"),
-      category: "meat",
-    },
-    {
-      id: 14,
-      name: "Fresh Salmon",
-      unit: "500g, Price per pack",
-      mrp: 15.99,
-      sellingPrice: 12.99,
-      image: require("../../assets/images/products/large/01.png"),
-      category: "fish",
-    },
-    {
-      id: 15,
-      name: "Lamb Chops",
-      unit: "1kg, Price per kg",
-      mrp: 18.99,
-      sellingPrice: 15.99,
-      image: require("../../assets/images/products/large/02.png"),
-      category: "meat",
-    },
-    {
-      id: 16,
-      name: "Ground Turkey",
-      unit: "500g, Price per pack",
-      mrp: 7.99,
-      sellingPrice: 6.49,
-      image: require("../../assets/images/products/large/03.png"),
-      category: "meat",
-    },
-  ];
+      // Fetch all data in parallel
+      const [slidersRes, categoriesRes, brandsRes, featuredRes, allProductsRes] = await Promise.all([
+        getMobileSliders(),
+        getCategories('active'),
+        getBrands('active'),
+        getProducts({ featured: '1', status: 'active' }),
+        getProducts({ status: 'active' }),
+      ]);
 
-  const brands = [
-    {
-      id: 1,
-      name: "Fresh Farm",
-      image: "https://images.pexels.com/photos/1143754/pexels-photo-1143754.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-    {
-      id: 2,
-      name: "Organic Plus",
-      image: "https://images.pexels.com/photos/1367192/pexels-photo-1367192.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-    {
-      id: 3,
-      name: "Green Valley",
-      image: "https://images.pexels.com/photos/1435904/pexels-photo-1435904.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-    {
-      id: 4,
-      name: "Pure Nature",
-      image: "https://images.pexels.com/photos/1414651/pexels-photo-1414651.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-    {
-      id: 5,
-      name: "Golden Harvest",
-      image: "https://images.pexels.com/photos/1002703/pexels-photo-1002703.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-    {
-      id: 6,
-      name: "Local Mart",
-      image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-    },
-  ];
+      // Map sliders data
+      if (slidersRes.success && slidersRes.data.length > 0) {
+        const mappedSliders = slidersRes.data.map((slider, index) => {
+          const colors = getCategoryColors(slider.category);
+          // console.log("slider.image",slider.image)
+          return {
+            id: slider.id,
+            title: slider.category || `Slider ${slider.id}`,
+            subtitle: "Fresh & Delicious",
+            image: slider.image ? { uri: slider.image } : require("../../assets/images/slider/slider_1.png"),
+            backgroundColor: colors.bg,
+          };
+        });
+        setBannerData(mappedSliders);
+      }
+
+      // Map categories data
+      if (categoriesRes.success && categoriesRes.data.length > 0) {
+        const mappedCategories = categoriesRes.data.map((cat) => {
+          const colors = getCategoryColors(cat.category);
+          // console.log(`name:`,cat)
+          return {
+            id: cat.id,
+            name: cat.category,
+            backgroundColor: colors.bg,
+            borderColor: colors.border,
+            image: cat.image ? { uri: cat.image } : require("../../assets/images/category/vegetables.png"),
+            cat_id: cat.id,
+          };
+        });
+        setCategories(mappedCategories);
+      }
+
+      // Map brands data
+      if (brandsRes.data && brandsRes.data.length > 0) {
+                  console.log(`brandsRes:`,brandsRes.data)
+
+        const mappedBrands = brandsRes.data.map((brand) => ({
+          id: brand.id,
+          name: brand.brand,
+          image: brand.image || "https://images.pexels.com/photos/1143754/pexels-photo-1143754.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+        }));
+        setBrands(mappedBrands);
+      }
+
+      // Map featured products to exclusive offers
+      if (featuredRes.success && featuredRes.data.length > 0) {
+        const mappedExclusive = featuredRes.data.slice(0, 5).map((product) => ({
+          id: product.id,
+          name: product.name,
+          unit: product.unit || `${product.weight || '1kg'}, Price per ${product.unit || 'kg'}`,
+          mrp: parseFloat(product.mrp) || 0,
+          sellingPrice: parseFloat(product.sale_price) || 0,
+          image: product.image ? { uri: product.image } : require("../../assets/images/products/large/01.png"),
+          category: product.category?.toLowerCase() || 'general',
+        }));
+        setExclusiveOffers(mappedExclusive);
+      }
+
+      // Map all products to best selling and meat products
+      if (allProductsRes.success && allProductsRes.data.length > 0) {
+        const allProducts = allProductsRes.data.map((product) => ({
+          id: product.id,
+          name: product.name,
+          unit: product.unit || `${product.weight || '1kg'}, Price per ${product.unit || 'kg'}`,
+          mrp: parseFloat(product.mrp) || 0,
+          sellingPrice: parseFloat(product.sale_price) || 0,
+          image: product.image ? { uri: product.image } : require("../../assets/images/products/large/01.png"),
+          category: product.category?.toLowerCase() || 'general',
+        }));
+
+        // Best selling - first 6 products (excluding featured)
+        setBestSelling(allProducts.slice(0, 6));
+
+        // Meat products - filter by meat/fish category or use last 5 products
+        const meatFiltered = allProducts.filter(p =>
+          p.category.includes('meat') || p.category.includes('fish')
+        );
+        setMeatProducts(meatFiltered.length > 0 ? meatFiltered.slice(0, 5) : allProducts.slice(-5));
+      }
+    } catch (error) {
+      console.error('Error fetching home data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleProductPress = (item) => {
-    // Navigate to product details
-    console.log("Product pressed:", item.name);
+    // Navigate to product details page with product ID
+    router.push(`/product/${item.id}`);
   };
 
   const handleBannerPress = (item) => {
     // Navigate to category or promotion page
-    console.log("Banner pressed:", item.title);
+    router.push(`/search?cat_id=${item.id}`);
   };
 
   const handleCategoryPress = (item) => {
@@ -372,9 +234,15 @@ const Home = () => {
 
   return (
     <SafeAreaWrapper>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary.main} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
           <View style={styles.headerContent}>
             {/* Company Logo */}
             <View style={styles.logoContainer}>
@@ -505,7 +373,8 @@ const Home = () => {
             contentContainerStyle={styles.productList}
           />
         </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaWrapper>
   );
 };
@@ -515,6 +384,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background.primary,
     paddingHorizontal: theme.spacing.lg,
+  },
+
+  // Loading Styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background.primary,
+  },
+  loadingText: {
+    marginTop: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.secondary,
   },
 
   // Header Styles

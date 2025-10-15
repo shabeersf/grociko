@@ -3,7 +3,7 @@ import { loginUser } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -74,79 +74,76 @@ const SignIn = () => {
     return /^[0-9\s]+$/.test(input);
   };
 
-  const handleSignIn = async () => {
-    // Reset errors
-    setEmailOrPhoneError('');
-    setPasswordError('');
+const handleSignIn = async () => {
+  // Reset errors
+  setEmailOrPhoneError('');
+  setPasswordError('');
 
-    let hasError = false;
+  let hasError = false;
 
-    // Email or Phone validation
-    if (!emailOrPhone.trim()) {
-      setEmailOrPhoneError('Email or phone number is required');
+  // Trim input
+  const trimmedInput = emailOrPhone.trim();
+  const trimmedPassword = password.trim();
+
+  // Validate email/phone input
+  if (!trimmedInput) {
+    setEmailOrPhoneError('Email or phone number is required');
+    hasError = true;
+  } else {
+    const isPhone = isPhoneNumber(trimmedInput);
+
+    if (isPhone) {
+      if (!validatePhone(trimmedInput)) {
+        setEmailOrPhoneError('Please enter a valid phone number (10-15 digits)');
+        hasError = true;
+      }
+    } else if (!validateEmail(trimmedInput)) {
+      setEmailOrPhoneError('Please enter a valid email address');
       hasError = true;
+    }
+  }
+
+  // Validate password
+  if (!trimmedPassword) {
+    setPasswordError('Password is required');
+    hasError = true;
+  } else if (trimmedPassword.length < 6) {
+    setPasswordError('Password must be at least 6 characters');
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  setLoading(true);
+
+  try {
+    const isPhone = isPhoneNumber(trimmedInput);
+
+    // ✅ Use clean logic that matches PHP expectations
+    const loginPayload = {
+      email: isPhone ? '' : trimmedInput,
+      phone: isPhone ? trimmedInput.replace(/\s/g, '') : '',
+      password: trimmedPassword,
+    };
+
+    console.log('🔐 Login attempt with:', isPhone ? 'phone' : 'email');
+
+    const response = await loginUser(loginPayload);
+
+    if (response.success) {
+      showToast('Login successful! Welcome back.', 'success');
+      setTimeout(() => router.replace('/(tabs)/home'), 1000);
     } else {
-      // Check if it's a phone number or email
-      const isPhone = isPhoneNumber(emailOrPhone);
-
-      if (isPhone) {
-        if (!validatePhone(emailOrPhone)) {
-          setEmailOrPhoneError('Please enter a valid phone number (10-15 digits)');
-          hasError = true;
-        }
-      } else {
-        if (!validateEmail(emailOrPhone)) {
-          setEmailOrPhoneError('Please enter a valid email address');
-          hasError = true;
-        }
-      }
+      showToast(response.error || 'Invalid credentials. Please try again.');
     }
+  } catch (error) {
+    console.error('Login error:', error);
+    showToast('An unexpected error occurred. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
-    // Password validation
-    if (!password.trim()) {
-      setPasswordError('Password is required');
-      hasError = true;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      hasError = true;
-    }
-
-    if (hasError) return;
-
-    setLoading(true);
-
-    try {
-      // Determine if input is email or phone
-      const isPhone = isPhoneNumber(emailOrPhone);
-
-      // Create login payload
-      const loginPayload = {
-        email: isPhone ? '' : emailOrPhone.trim(),
-        phone: isPhone ? emailOrPhone.trim().replace(/\s/g, '') : '',
-        password: password,
-      };
-
-      console.log('🔐 Login attempt with:', isPhone ? 'phone' : 'email');
-
-      // Call API
-      const response = await loginUser(loginPayload);
-
-      if (response.success) {
-        showToast('Login successful! Welcome back.', 'success');
-        setTimeout(() => {
-          router.replace('/(tabs)/home');
-        }, 1000);
-      } else {
-        // Show error toast
-        showToast(response.error || 'Invalid credentials. Please try again.');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      showToast('An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleForgotPassword = () => {
     showToast('Password reset feature coming soon!', 'info');
