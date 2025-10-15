@@ -384,6 +384,63 @@ export const validateImageFile = (fileInfo) => {
   };
 };
 
+/**
+ * Get Product Details by ID
+ */
+export const getProductById = async (productId) => {
+  try {
+    const headers = {
+      'Authorization': getBasicAuthHeader(),
+      'Accept': 'application/json',
+    };
+
+    console.log('📦 Fetching product:', productId);
+
+    const response = await makeRequest(`/get-product.php?id=${productId}`, {
+      method: 'GET',
+      headers,
+    });
+
+    console.log('📥 Product Response:', {
+      success: response.success,
+      statusCode: response.statusCode,
+      hasData: !!response.data,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      // Return the first product from the array
+      const productData = response.data.data && response.data.data.length > 0
+        ? response.data.data[0]
+        : null;
+
+      if (productData) {
+        return {
+          success: true,
+          data: productData,
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Product not found',
+        };
+      }
+    } else if (response.data?.response_code === 220) {
+      return {
+        success: false,
+        error: 'Product not found',
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || 'Failed to fetch product',
+      };
+    }
+  } catch (error) {
+    console.error('❌ Product Fetch Error:', error);
+    return handleApiError(error, '/get-product.php');
+  }
+};
+
 // Export storage keys for external use if needed
 export { STORAGE_KEYS };
 
