@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.secondary.main,
+    backgroundColor: theme.colors.primary.main,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1583,7 +1583,7 @@ const styles = StyleSheet.create({
   },
   sliderProgress: {
     height: '100%',
-    backgroundColor: theme.colors.secondary.main,
+    backgroundColor: theme.colors.primary.main,
     borderRadius: 3,
   },
 
@@ -1602,8 +1602,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
   selectedBrandOption: {
-    backgroundColor: theme.colors.secondary.main,
-    borderColor: theme.colors.secondary.main,
+    backgroundColor: theme.colors.primary.main,
+    borderColor: theme.colors.primary.main,
   },
   brandOptionText: {
     fontSize: theme.typography.fontSize.sm,
@@ -1630,8 +1630,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
   selectedDiscountOption: {
-    backgroundColor: theme.colors.secondary.main,
-    borderColor: theme.colors.secondary.main,
+    backgroundColor: theme.colors.primary.main,
+    borderColor: theme.colors.primary.main,
   },
   discountText: {
     fontSize: theme.typography.fontSize.sm,

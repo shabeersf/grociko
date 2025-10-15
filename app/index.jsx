@@ -15,33 +15,61 @@ const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1.1)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const bounceAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Start entrance animations
-    Animated.sequence([
-      Animated.delay(200), // Small delay for better UX
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
+    // Main entrance animation - fade and scale
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
     ]).start();
 
-    // Navigate to home after 2 seconds
+    // Subtle bounce animation - continuous loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Navigate to home after 3 seconds
     const timer = setTimeout(() => {
+
       router.replace('/home');
-    }, 2000);
+
+    }, 3000);
 
     return () => clearTimeout(timer);
-  }, [fadeAnim, scaleAnim]);
+  }, []);
+
+  // Interpolations for smooth animations
+  const bounceTranslate = bounceAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, -10, 0],
+  });
+
+  const pulseScale = bounceAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.05, 1],
+  });
 
   return (
     <View style={styles.container}>
@@ -51,34 +79,37 @@ export default function SplashScreen() {
         translucent={false}
       />
 
-      {/* Full Screen Splash Image */}
+      {/* Splash background */}
+      <Image
+        source={require('../assets/company/splash.png')}
+        style={styles.splashImage}
+        resizeMode="cover"
+      />
+
+      {/* Center logo with animations */}
       <Animated.View
         style={[
-          styles.imageContainer,
+          styles.centerLogoContainer,
           {
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
+            transform: [
+              { scale: Animated.multiply(scaleAnim, pulseScale) },
+              { translateY: bounceTranslate },
+            ],
           },
         ]}
       >
         <Image
-          source={require('../assets/company/splash.png')}
-          style={styles.splashImage}
-          resizeMode="cover"
+          source={require('../assets/company/center.png')}
+          style={styles.centerLogo}
+          resizeMode="contain"
         />
       </Animated.View>
 
-      {/* Loading Indicator */}
+      {/* Loading bar */}
       <View style={styles.loadingContainer}>
         <View style={styles.loadingTrack}>
-          <Animated.View
-            style={[
-              styles.loadingBar,
-              {
-                opacity: fadeAnim,
-              }
-            ]}
-          />
+          <Animated.View style={[styles.loadingBar, { opacity: fadeAnim }]} />
         </View>
       </View>
     </View>
@@ -88,21 +119,25 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background.primary,
-  },
-
-  // Image Container
-  imageContainer: {
-    flex: 1,
-    width: width,
-    height: height,
+    backgroundColor: theme.colors.background.gradient.splash,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   splashImage: {
+    position: 'absolute',
     width: '100%',
     height: '100%',
   },
-
-  // Loading Indicator
+  centerLogoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: width * 0.75,
+    height: width * 0.75,
+  },
+  centerLogo: {
+    width: '100%',
+    height: '100%',
+  },
   loadingContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? theme.spacing['6xl'] : theme.spacing['5xl'],

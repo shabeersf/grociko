@@ -1,11 +1,13 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { loginUser } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  Animated,
   Dimensions,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,34 +21,88 @@ import {
 const { width } = Dimensions.get('window');
 
 const SignIn = () => {
-  const [email, setEmail] = useState('');
+  // Form fields - can use either email or phone
+  const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
+
+  // UI states
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [emailError, setEmailError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' });
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Error states
+  const [emailOrPhoneError, setEmailOrPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // Show toast notification
+  const showToast = (message, type = 'error') => {
+    setToast({ visible: true, message, type });
+
+    Animated.sequence([
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(3000),
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setToast({ visible: false, message: '', type: 'error' });
+    });
+  };
+
+  // Validation functions
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
+  const validatePhone = (phone) => {
+    const phoneRegex = /^[0-9]{10,15}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
+  };
+
+  const isPhoneNumber = (input) => {
+    return /^[0-9\s]+$/.test(input);
+  };
+
   const handleSignIn = async () => {
     // Reset errors
-    setEmailError('');
+    setEmailOrPhoneError('');
     setPasswordError('');
 
-    // Validation
     let hasError = false;
 
-    if (!email.trim()) {
-      setEmailError('Email is required');
+    // Email or Phone validation
+    if (!emailOrPhone.trim()) {
+      setEmailOrPhoneError('Email or phone number is required');
       hasError = true;
-    } else if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address');
-      hasError = true;
+    } else {
+      // Check if it's a phone number or email
+      const isPhone = isPhoneNumber(emailOrPhone);
+
+      if (isPhone) {
+        if (!validatePhone(emailOrPhone)) {
+          setEmailOrPhoneError('Please enter a valid phone number (10-15 digits)');
+          hasError = true;
+        }
+      } else {
+        if (!validateEmail(emailOrPhone)) {
+          setEmailOrPhoneError('Please enter a valid email address');
+          hasError = true;
+        }
+      }
     }
 
+    // Password validation
     if (!password.trim()) {
       setPasswordError('Password is required');
       hasError = true;
@@ -59,37 +115,41 @@ const SignIn = () => {
 
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Determine if input is email or phone
+      const isPhone = isPhoneNumber(emailOrPhone);
+
+      // Create login payload
+      const loginPayload = {
+        email: isPhone ? '' : emailOrPhone.trim(),
+        phone: isPhone ? emailOrPhone.trim().replace(/\s/g, '') : '',
+        password: password,
+      };
+
+      console.log('🔐 Login attempt with:', isPhone ? 'phone' : 'email');
+
+      // Call API
+      const response = await loginUser(loginPayload);
+
+      if (response.success) {
+        showToast('Login successful! Welcome back.', 'success');
+        setTimeout(() => {
+          router.replace('/(tabs)/home');
+        }, 1000);
+      } else {
+        // Show error toast
+        showToast(response.error || 'Invalid credentials. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      showToast('An unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-      Alert.alert(
-        'Sign In Successful!',
-        'Welcome back to Grociko',
-        [
-          {
-            text: 'Continue',
-            onPress: () => router.replace('/(tabs)/home'),
-          },
-        ]
-      );
-    }, 1500);
+    }
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Reset Password',
-      'A password reset link will be sent to your email address.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Send Link',
-          onPress: () => Alert.alert('Success', 'Reset link sent to your email!'),
-        },
-      ]
-    );
+    showToast('Password reset feature coming soon!', 'info');
   };
 
   return (
@@ -109,45 +169,49 @@ const SignIn = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Logo Section */}
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Sign in to continue shopping</Text>
+          </View>
+
+          {/* Logo */}
           <View style={styles.logoSection}>
             <View style={styles.logoContainer}>
-              <View style={styles.carrotContainer}>
-                <View style={styles.carrotLeaves}>
-                  <View style={[styles.leaf, styles.leafLeft]} />
-                  <View style={[styles.leaf, styles.leafCenter]} />
-                  <View style={[styles.leaf, styles.leafRight]} />
-                </View>
-                <View style={styles.carrotBody} />
-              </View>
+              <Image
+                source={require('../../assets/company/logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.brandName}>Grociko</Text>
-            <Text style={styles.welcomeText}>Welcome back!</Text>
-            <Text style={styles.subtitleText}>Sign in to your account to continue</Text>
           </View>
 
           {/* Form Section */}
           <View style={styles.formSection}>
-            {/* Email Input */}
+            {/* Email or Phone Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.inputWrapper, emailError && styles.inputError]}>
-                <Ionicons name="mail-outline" size={20} color={theme.colors.text.secondary} />
+              <Text style={styles.inputLabel}>Email or Phone Number</Text>
+              <View style={[styles.inputWrapper, emailOrPhoneError && styles.inputError]}>
+                <Ionicons
+                  name={isPhoneNumber(emailOrPhone) ? "call-outline" : "mail-outline"}
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter your email"
+                  placeholder="Enter email or phone"
                   placeholderTextColor={theme.colors.text.placeholder}
-                  value={email}
+                  value={emailOrPhone}
                   onChangeText={(text) => {
-                    setEmail(text);
-                    if (emailError) setEmailError('');
+                    setEmailOrPhone(text);
+                    if (emailOrPhoneError) setEmailOrPhoneError('');
                   }}
-                  keyboardType="email-address"
+                  keyboardType="default"
                   autoCapitalize="none"
-                  autoComplete="email"
+                  autoComplete="off"
                 />
               </View>
-              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              {emailOrPhoneError ? <Text style={styles.errorText}>{emailOrPhoneError}</Text> : null}
             </View>
 
             {/* Password Input */}
@@ -181,22 +245,36 @@ const SignIn = () => {
               {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
             </View>
 
-            {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
+            {/* Remember Me & Forgot Password Row */}
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={styles.rememberMeContainer}
+                onPress={() => setRememberMe(!rememberMe)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkedBox]}>
+                  {rememberMe && (
+                    <Ionicons name="checkmark" size={14} color={theme.colors.text.white} />
+                  )}
+                </View>
+                <Text style={styles.rememberMeText}>Remember me</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleForgotPassword}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Sign In Button */}
             <TouchableOpacity
               style={[styles.signInButton, loading && styles.buttonDisabled]}
               onPress={handleSignIn}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <View style={styles.loadingContainer}>
-                  <View style={styles.loadingDot} />
-                  <View style={[styles.loadingDot, styles.loadingDot2]} />
-                  <View style={[styles.loadingDot, styles.loadingDot3]} />
+                  <Text style={styles.loadingText}>Signing in...</Text>
                 </View>
               ) : (
                 <>
@@ -205,7 +283,6 @@ const SignIn = () => {
                 </>
               )}
             </TouchableOpacity>
-
           </View>
 
           {/* Footer */}
@@ -216,6 +293,41 @@ const SignIn = () => {
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* Toast Notification */}
+        {toast.visible && (
+          <Animated.View
+            style={[
+              styles.toastContainer,
+              toast.type === 'success' && styles.toastSuccess,
+              toast.type === 'info' && styles.toastInfo,
+              {
+                opacity: toastAnim,
+                transform: [
+                  {
+                    translateY: toastAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [100, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                toast.type === 'success'
+                  ? 'checkmark-circle'
+                  : toast.type === 'info'
+                  ? 'information-circle'
+                  : 'alert-circle'
+              }
+              size={24}
+              color={theme.colors.text.white}
+            />
+            <Text style={styles.toastText}>{toast.message}</Text>
+          </Animated.View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaWrapper>
   );
@@ -228,6 +340,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: theme.spacing.xl,
+    paddingBottom: theme.spacing['2xl'],
   },
 
   // Header
@@ -246,84 +359,47 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
 
-  // Logo Section
-  logoSection: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing['2xl'],
+  // Title Section
+  titleSection: {
+    marginBottom: theme.spacing.xl,
   },
-  logoContainer: {
-    marginBottom: theme.spacing.lg,
-  },
-  carrotContainer: {
-    alignItems: 'center',
-    width: 56,
-    height: 56,
-  },
-  carrotLeaves: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginBottom: -2,
-    zIndex: 2,
-  },
-  leaf: {
-    backgroundColor: theme.colors.primary.main,
-    borderRadius: 8,
-    marginHorizontal: 1,
-  },
-  leafLeft: {
-    width: 10,
-    height: 14,
-    transform: [{ rotate: '-20deg' }],
-  },
-  leafCenter: {
-    width: 8,
-    height: 18,
-    transform: [{ rotate: '0deg' }],
-  },
-  leafRight: {
-    width: 10,
-    height: 14,
-    transform: [{ rotate: '20deg' }],
-  },
-  carrotBody: {
-    width: 24,
-    height: 36,
-    backgroundColor: theme.colors.primary.main,
-    borderRadius: 14,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    zIndex: 1,
-  },
-  brandName: {
+  mainTitle: {
     fontSize: theme.typography.fontSize['4xl'],
     fontFamily: 'Outfit-Bold',
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
   },
-  welcomeText: {
-    fontSize: theme.typography.fontSize.xl,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
-  },
-  subtitleText: {
+  subtitle: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
-    textAlign: 'center',
+    lineHeight: theme.typography.fontSize.base * 1.5,
+  },
+
+  // Logo Section
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: theme.spacing['2xl'],
+    paddingVertical: theme.spacing.xl,
+  },
+  logoContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 180,
+    height: 100,
   },
 
   // Form Section
   formSection: {
     flex: 1,
-    paddingVertical: theme.spacing.xl,
   },
   inputContainer: {
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
   inputLabel: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
@@ -335,8 +411,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing.lg,
     height: 56,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
   },
   inputError: {
     borderColor: theme.colors.status.error,
@@ -353,21 +429,47 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xs,
   },
   errorText: {
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.xs,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.status.error,
     marginTop: theme.spacing.xs,
     marginLeft: theme.spacing.sm,
   },
 
-  // Forgot Password
-  forgotPassword: {
-    alignSelf: 'flex-end',
+  // Options Row
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: theme.colors.surface.border,
+    borderRadius: theme.borderRadius.sm,
+    marginRight: theme.spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkedBox: {
+    backgroundColor: theme.colors.primary.main,
+    borderColor: theme.colors.primary.main,
+  },
+  rememberMeText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
   },
   forgotPasswordText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: 'Outfit-SemiBold',
     color: theme.colors.primary.main,
   },
 
@@ -381,11 +483,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.xl,
-    shadowColor: theme.colors.primary.main,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -396,26 +493,15 @@ const styles = StyleSheet.create({
     color: theme.colors.text.white,
   },
   loadingContainer: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.colors.text.white,
-    marginHorizontal: 2,
-    opacity: 0.4,
+  loadingText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.white,
   },
-  loadingDot2: {
-    opacity: 0.7,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
-
 
   // Footer
   footer: {
@@ -433,6 +519,38 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.primary.main,
+  },
+
+  // Toast Notification
+  toastContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 40 : 20,
+    left: 20,
+    right: 20,
+    backgroundColor: theme.colors.status.error,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  toastSuccess: {
+    backgroundColor: theme.colors.status.success,
+  },
+  toastInfo: {
+    backgroundColor: theme.colors.status.info,
+  },
+  toastText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.white,
+    marginLeft: theme.spacing.md,
+    flex: 1,
   },
 });
 

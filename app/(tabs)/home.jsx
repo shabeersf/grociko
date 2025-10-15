@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 2,
-    borderColor: theme.colors.secondary.main,
+    borderColor: theme.colors.primary.main,
   },
 
   // Search Styles

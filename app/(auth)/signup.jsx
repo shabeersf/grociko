@@ -1,11 +1,14 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { createSignupFormData, signupUser, validateImageFile } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
-  Alert,
+  Animated,
   Dimensions,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,43 +22,139 @@ import {
 const { width } = Dimensions.get('window');
 
 const SignUp = () => {
+  // Form fields
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [profileImage, setProfileImage] = useState(null);
+
+  // UI states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
+  // Toast state
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' });
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Show toast notification
+  const showToast = (message, type = 'error') => {
+    setToast({ visible: true, message, type });
+
+    Animated.sequence([
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(3000),
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setToast({ visible: false, message: '', type: 'error' });
+    });
+  };
+
   // Error states
+  const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
+  // Validation functions
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
   const validatePhone = (phone) => {
-    const phoneRegex = /^[\+]?[0-9]{10,15}$/;
+    const phoneRegex = /^[0-9]{10,15}$/;
     return phoneRegex.test(phone.replace(/\s/g, ''));
   };
 
   const validatePassword = (password) => {
-    return password.length >= 8;
+    return password.length >= 6;
   };
 
+  const validateUsername = (username) => {
+    return username.length >= 3;
+  };
+
+  // Image picker function
+  const pickImage = async () => {
+    try {
+      // Request permission
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (permissionResult.granted === false) {
+        showToast('Permission to access camera roll is required!', 'error');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const selectedImage = result.assets[0];
+
+        // Validate image
+        const validation = validateImageFile({
+          fileSize: selectedImage.fileSize,
+          mimeType: selectedImage.mimeType,
+        });
+
+        if (!validation.isValid) {
+          showToast(validation.errors.join('. '), 'error');
+          return;
+        }
+
+        setProfileImage(selectedImage);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showToast('Failed to pick image. Please try again.', 'error');
+    }
+  };
+
+  // Remove selected image
+  const removeImage = () => {
+    setProfileImage(null);
+  };
+
+  // Handle signup
   const handleSignUp = async () => {
     // Reset errors
+    setNameError('');
     setEmailError('');
     setPhoneError('');
+    setUsernameError('');
     setPasswordError('');
     setConfirmPasswordError('');
 
     let hasError = false;
+
+    // Name validation
+    if (!name.trim()) {
+      setNameError('Full name is required');
+      hasError = true;
+    } else if (name.trim().length < 2) {
+      setNameError('Name must be at least 2 characters');
+      hasError = true;
+    }
 
     // Email validation
     if (!email.trim()) {
@@ -71,7 +170,16 @@ const SignUp = () => {
       setPhoneError('Phone number is required');
       hasError = true;
     } else if (!validatePhone(phone)) {
-      setPhoneError('Please enter a valid phone number');
+      setPhoneError('Please enter a valid phone number (10-15 digits)');
+      hasError = true;
+    }
+
+    // Username validation
+    if (!username.trim()) {
+      setUsernameError('Username is required');
+      hasError = true;
+    } else if (!validateUsername(username)) {
+      setUsernameError('Username must be at least 3 characters');
       hasError = true;
     }
 
@@ -80,7 +188,7 @@ const SignUp = () => {
       setPasswordError('Password is required');
       hasError = true;
     } else if (!validatePassword(password)) {
-      setPasswordError('Password must be at least 8 characters');
+      setPasswordError('Password must be at least 6 characters');
       hasError = true;
     }
 
@@ -95,7 +203,7 @@ const SignUp = () => {
 
     // Terms agreement
     if (!agreeToTerms) {
-      Alert.alert('Terms & Conditions', 'Please agree to Terms & Conditions to continue');
+      showToast('Please agree to Terms & Conditions to continue', 'error');
       return;
     }
 
@@ -103,36 +211,50 @@ const SignUp = () => {
 
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-      Alert.alert(
-        'Account Created Successfully!',
-        'Welcome to Grociko! Your account has been created.',
-        [
-          {
-            text: 'Get Started',
-            onPress: () => router.replace('/(tabs)/home'),
-          },
-        ]
+    try {
+      // Create form data
+      const formData = createSignupFormData(
+        {
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          username: username.trim(),
+          password: password,
+          c_password: confirmPassword,
+        },
+        profileImage?.uri
       );
-    }, 2000);
+
+      // Call API
+      const response = await signupUser(formData);
+
+      if (response.success) {
+        showToast(response.message || 'Account created successfully!', 'success');
+        setTimeout(() => {
+          router.replace('/(tabs)/home');
+        }, 1500);
+      } else {
+        // Show errors
+        const errorMessage = Array.isArray(response.errors)
+          ? response.errors.join('. ')
+          : response.error;
+
+        showToast(errorMessage, 'error');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      showToast('An unexpected error occurred. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatPhoneNumber = (text) => {
     // Remove non-numeric characters
     const cleaned = text.replace(/\D/g, '');
 
-    // Format as needed (this is a simple example)
-    if (cleaned.length <= 3) {
-      return cleaned;
-    } else if (cleaned.length <= 6) {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
-    } else if (cleaned.length <= 10) {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
-    } else {
-      return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 10)}`;
-    }
+    // Limit to 15 digits
+    return cleaned.slice(0, 15);
   };
 
   return (
@@ -152,25 +274,84 @@ const SignUp = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Logo Section */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoContainer}>
-              <View style={styles.carrotContainer}>
-                <View style={styles.carrotLeaves}>
-                  <View style={[styles.leaf, styles.leafLeft]} />
-                  <View style={[styles.leaf, styles.leafCenter]} />
-                  <View style={[styles.leaf, styles.leafRight]} />
-                </View>
-                <View style={styles.carrotBody} />
-              </View>
-            </View>
-            <Text style={styles.brandName}>Grociko</Text>
-            <Text style={styles.welcomeText}>Create Account</Text>
-            <Text style={styles.subtitleText}>Sign up to get started with fresh groceries</Text>
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>Create Account</Text>
+            <Text style={styles.subtitle}>Sign up to get started with fresh groceries</Text>
           </View>
 
+          {/* Profile Image Picker */}
+          <View style={styles.imagePickerSection}>
+            <TouchableOpacity
+              style={styles.imagePickerContainer}
+              onPress={pickImage}
+            >
+              {profileImage ? (
+                <View style={styles.selectedImageContainer}>
+                  <Image
+                    source={{ uri: profileImage.uri }}
+                    style={styles.selectedImage}
+                  />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={removeImage}
+                  >
+                    <Ionicons name="close-circle" size={28} color={theme.colors.status.error} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <View style={styles.cameraIconContainer}>
+                    <Ionicons name="camera" size={32} color={theme.colors.primary.main} />
+                  </View>
+                  <Text style={styles.addPhotoText}>Add Profile Photo</Text>
+                  <Text style={styles.addPhotoSubtext}>Optional</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+<View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Username</Text>
+              <View style={[styles.inputWrapper, usernameError && styles.inputError]}>
+                <Ionicons name="at-outline" size={20} color={theme.colors.text.secondary} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Choose a username"
+                  placeholderTextColor={theme.colors.text.placeholder}
+                  value={username}
+                  onChangeText={(text) => {
+                    setUsername(text);
+                    if (usernameError) setUsernameError('');
+                  }}
+                  autoCapitalize="none"
+                  autoComplete="username"
+                />
+              </View>
+              {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+            </View>
           {/* Form Section */}
           <View style={styles.formSection}>
+            {/* Name Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <View style={[styles.inputWrapper, nameError && styles.inputError]}>
+                <Ionicons name="person-outline" size={20} color={theme.colors.text.secondary} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter your full name"
+                  placeholderTextColor={theme.colors.text.placeholder}
+                  value={name}
+                  onChangeText={(text) => {
+                    setName(text);
+                    if (nameError) setNameError('');
+                  }}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                />
+              </View>
+              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            </View>
+
             {/* Email Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email Address</Text>
@@ -198,7 +379,6 @@ const SignUp = () => {
               <Text style={styles.inputLabel}>Phone Number</Text>
               <View style={[styles.inputWrapper, phoneError && styles.inputError]}>
                 <Ionicons name="call-outline" size={20} color={theme.colors.text.secondary} />
-                <Text style={styles.countryCode}>+880</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter phone number"
@@ -216,6 +396,9 @@ const SignUp = () => {
               </View>
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
             </View>
+
+            {/* Username Input */}
+            
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
@@ -246,7 +429,7 @@ const SignUp = () => {
                 </TouchableOpacity>
               </View>
               {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-              <Text style={styles.passwordHint}>Must be at least 8 characters</Text>
+              <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
             </View>
 
             {/* Confirm Password Input */}
@@ -284,10 +467,11 @@ const SignUp = () => {
             <TouchableOpacity
               style={styles.termsContainer}
               onPress={() => setAgreeToTerms(!agreeToTerms)}
+              activeOpacity={0.7}
             >
               <View style={[styles.checkbox, agreeToTerms && styles.checkedBox]}>
                 {agreeToTerms && (
-                  <Ionicons name="checkmark" size={14} color={theme.colors.text.white} />
+                  <Ionicons name="checkmark" size={16} color={theme.colors.text.white} />
                 )}
               </View>
               <Text style={styles.termsText}>
@@ -303,12 +487,11 @@ const SignUp = () => {
               style={[styles.signUpButton, loading && styles.buttonDisabled]}
               onPress={handleSignUp}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <View style={styles.loadingContainer}>
-                  <View style={styles.loadingDot} />
-                  <View style={[styles.loadingDot, styles.loadingDot2]} />
-                  <View style={[styles.loadingDot, styles.loadingDot3]} />
+                  <Text style={styles.loadingText}>Creating account...</Text>
                 </View>
               ) : (
                 <>
@@ -317,25 +500,6 @@ const SignUp = () => {
                 </>
               )}
             </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social Sign Up */}
-            <View style={styles.socialContainer}>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-google" size={24} color={theme.colors.social.google} />
-                <Text style={styles.socialButtonText}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-facebook" size={24} color={theme.colors.social.facebook} />
-                <Text style={styles.socialButtonText}>Facebook</Text>
-              </TouchableOpacity>
-            </View>
           </View>
 
           {/* Footer */}
@@ -346,6 +510,41 @@ const SignUp = () => {
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* Toast Notification */}
+        {toast.visible && (
+          <Animated.View
+            style={[
+              styles.toastContainer,
+              toast.type === 'success' && styles.toastSuccess,
+              toast.type === 'info' && styles.toastInfo,
+              {
+                opacity: toastAnim,
+                transform: [
+                  {
+                    translateY: toastAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [100, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                toast.type === 'success'
+                  ? 'checkmark-circle'
+                  : toast.type === 'info'
+                  ? 'information-circle'
+                  : 'alert-circle'
+              }
+              size={24}
+              color={theme.colors.text.white}
+            />
+            <Text style={styles.toastText}>{toast.message}</Text>
+          </Animated.View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaWrapper>
   );
@@ -358,6 +557,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: theme.spacing.xl,
+    paddingBottom: theme.spacing['2xl'],
   },
 
   // Header
@@ -376,84 +576,87 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
 
-  // Logo Section
-  logoSection: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
+  // Title Section
+  titleSection: {
+    marginBottom: theme.spacing.xl,
   },
-  logoContainer: {
-    marginBottom: theme.spacing.lg,
-  },
-  carrotContainer: {
-    alignItems: 'center',
-    width: 56,
-    height: 56,
-  },
-  carrotLeaves: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginBottom: -2,
-    zIndex: 2,
-  },
-  leaf: {
-    backgroundColor: theme.colors.primary.main,
-    borderRadius: 8,
-    marginHorizontal: 1,
-  },
-  leafLeft: {
-    width: 10,
-    height: 14,
-    transform: [{ rotate: '-20deg' }],
-  },
-  leafCenter: {
-    width: 8,
-    height: 18,
-    transform: [{ rotate: '0deg' }],
-  },
-  leafRight: {
-    width: 10,
-    height: 14,
-    transform: [{ rotate: '20deg' }],
-  },
-  carrotBody: {
-    width: 24,
-    height: 36,
-    backgroundColor: theme.colors.primary.main,
-    borderRadius: 14,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    zIndex: 1,
-  },
-  brandName: {
+  mainTitle: {
     fontSize: theme.typography.fontSize['4xl'],
     fontFamily: 'Outfit-Bold',
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
   },
-  welcomeText: {
-    fontSize: theme.typography.fontSize.xl,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
-  },
-  subtitleText: {
+  subtitle: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
+    lineHeight: theme.typography.fontSize.base * 1.5,
+  },
+
+  // Image Picker Section
+  imagePickerSection: {
+    alignItems: 'center',
+    marginBottom: theme.spacing['2xl'],
+  },
+  imagePickerContainer: {
+    width: 120,
+    height: 120,
+  },
+  selectedImageContainer: {
+    width: 120,
+    height: 120,
+    position: 'relative',
+  },
+  selectedImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: theme.colors.primary.main,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: theme.colors.surface.white,
+    borderRadius: 14,
+  },
+  imagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: theme.colors.primary[50],
+    borderWidth: 2,
+    borderColor: theme.colors.primary.main,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraIconContainer: {
+    marginBottom: theme.spacing.xs,
+  },
+  addPhotoText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-SemiBold',
+    color: theme.colors.primary.main,
     textAlign: 'center',
+  },
+  addPhotoSubtext: {
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.tertiary,
+    marginTop: 2,
   },
 
   // Form Section
   formSection: {
     flex: 1,
-    paddingVertical: theme.spacing.lg,
   },
   inputContainer: {
     marginBottom: theme.spacing.lg,
   },
   inputLabel: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
@@ -465,21 +668,12 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing.lg,
     height: 56,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
   },
   inputError: {
     borderColor: theme.colors.status.error,
     backgroundColor: theme.colors.status.error + '10',
-  },
-  countryCode: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-    marginLeft: theme.spacing.sm,
-    paddingRight: theme.spacing.sm,
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.surface.border,
   },
   textInput: {
     flex: 1,
@@ -492,7 +686,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xs,
   },
   errorText: {
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.xs,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.status.error,
     marginTop: theme.spacing.xs,
@@ -511,13 +705,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: theme.spacing.xl,
+    paddingVertical: theme.spacing.sm,
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderWidth: 2,
     borderColor: theme.colors.surface.border,
-    borderRadius: theme.borderRadius.xs,
+    borderRadius: theme.borderRadius.sm,
     marginRight: theme.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -532,7 +727,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
-    lineHeight: theme.typography.fontSize.sm * 1.4,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
   },
   termsLink: {
     color: theme.colors.primary.main,
@@ -549,11 +744,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.xl,
-    shadowColor: theme.colors.primary.main,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -564,66 +754,14 @@ const styles = StyleSheet.create({
     color: theme.colors.text.white,
   },
   loadingContainer: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.colors.text.white,
-    marginHorizontal: 2,
-    opacity: 0.4,
-  },
-  loadingDot2: {
-    opacity: 0.7,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
-
-  // Divider
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: theme.spacing.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.colors.surface.border,
-  },
-  dividerText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.tertiary,
-    marginHorizontal: theme.spacing.lg,
-  },
-
-  // Social Container
-  socialContainer: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.xl,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surface.card,
-    borderRadius: theme.borderRadius.lg,
-    paddingVertical: theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.surface.border,
-  },
-  socialButtonText: {
+  loadingText: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-Medium',
-    color: theme.colors.text.primary,
-    marginLeft: theme.spacing.sm,
+    color: theme.colors.text.white,
   },
 
   // Footer
@@ -642,6 +780,38 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.primary.main,
+  },
+
+  // Toast Notification
+  toastContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 40 : 20,
+    left: 20,
+    right: 20,
+    backgroundColor: theme.colors.status.error,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  toastSuccess: {
+    backgroundColor: theme.colors.status.success,
+  },
+  toastInfo: {
+    backgroundColor: theme.colors.status.info,
+  },
+  toastText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.white,
+    marginLeft: theme.spacing.md,
+    flex: 1,
   },
 });
 

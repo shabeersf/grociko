@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   detailsButton: {
-    backgroundColor: theme.colors.secondary.main,
+    backgroundColor: theme.colors.primary.main,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.borderRadius.lg,
