@@ -1,4 +1,5 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { useUser } from '@/providers/UserProvider';
 import { loginUser } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,9 @@ import {
 const { width } = Dimensions.get('window');
 
 const SignIn = () => {
+  // Get user context
+  const { loginUser: loginUserContext } = useUser();
+
   // Form fields - can use either email or phone
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -131,8 +135,11 @@ const handleSignIn = async () => {
     const response = await loginUser(loginPayload);
 
     if (response.success) {
+      // Save user to context
+      await loginUserContext(response.data, response.jwt);
+
       showToast('Login successful! Welcome back.', 'success');
-      setTimeout(() => router.replace('/(tabs)/home'), 1000);
+      setTimeout(() => router.replace('/home'), 1000);
     } else {
       showToast(response.error || 'Invalid credentials. Please try again.');
     }
@@ -161,7 +168,7 @@ const handleSignIn = async () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.push("/home")}>
               <Ionicons name="chevron-back" size={24} color={theme.colors.text.primary} />
             </TouchableOpacity>
           </View>

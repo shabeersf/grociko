@@ -1,6 +1,7 @@
 import BannerCarousel from "@/components/BannerCarousel";
 import ProductCard from "@/components/ProductCard";
 import SafeAreaWrapper from "@/components/SafeAreaWrapper";
+import { useUser } from "@/providers/UserProvider";
 import { getBrands, getCategories, getMobileSliders, getProducts } from "@/services/apiService";
 import theme from "@/utils/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,9 @@ import {
 } from "react-native";
 
 const Home = () => {
+  // Get user context
+  const { user, isAuthenticated, getUserImage } = useUser();
+
   // State for dynamic data
   const [bannerData, setBannerData] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -254,11 +258,22 @@ const Home = () => {
             </View>
 
             {/* Profile Section */}
-            <TouchableOpacity style={styles.profileSection} onPress={() => router.push("/my-details")}>
+            <TouchableOpacity
+              style={styles.profileSection}
+              onPress={() => {
+                if (isAuthenticated) {
+                  router.push("/my-details");
+                } else {
+                  router.push("/(auth)/signin");
+                }
+              }}
+            >
               <Image
-                source={{
-                  uri: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
-                }}
+                source={
+                  isAuthenticated && getUserImage()
+                    ? { uri: getUserImage() }
+                    : require("../../assets/company/profile.png")
+                }
                 style={styles.profileImage}
                 resizeMode="cover"
               />

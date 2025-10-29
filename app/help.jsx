@@ -74,13 +74,7 @@ const Help = () => {
       icon: 'bag-outline',
       action: () => router.push('/orders'),
     },
-    {
-      id: '2',
-      title: 'Payment & Billing',
-      description: 'Payment methods, billing, and refunds',
-      icon: 'card-outline',
-      action: () => router.push('/payment-methods'),
-    },
+   
     {
       id: '3',
       title: 'Delivery Address',

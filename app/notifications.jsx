@@ -44,16 +44,7 @@ const Notifications = () => {
       icon: 'checkmark-circle-outline',
       iconColor: theme.colors.status.info,
     },
-    {
-      id: '4',
-      title: 'Payment Successful',
-      message: 'Payment of $25.97 was processed successfully',
-      time: '1 day ago',
-      type: 'payment',
-      read: true,
-      icon: 'card-outline',
-      iconColor: theme.colors.status.success,
-    },
+  
     {
       id: '5',
       title: 'New Products Available',
@@ -70,7 +61,6 @@ const Notifications = () => {
     orderUpdates: true,
     promotions: true,
     newProducts: false,
-    payments: true,
     general: true,
   });
 
@@ -90,9 +80,7 @@ const Notifications = () => {
       case 'promotion':
         router.push('/(tabs)/search');
         break;
-      case 'payment':
-        router.push('/payment-methods');
-        break;
+      
       default:
         break;
     }
@@ -175,11 +163,7 @@ const Notifications = () => {
       title: 'New Products',
       description: 'Be the first to know about new arrivals',
     },
-    {
-      key: 'payments',
-      title: 'Payment Confirmations',
-      description: 'Get notified when payments are processed',
-    },
+   
     {
       key: 'general',
       title: 'General Notifications',

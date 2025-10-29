@@ -1,44 +1,32 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { getAboutUs } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import RenderHtml from 'react-native-render-html';
 
 const About = () => {
+  const [loading, setLoading] = useState(true);
+  const [aboutData, setAboutData] = useState(null);
+  const { width } = useWindowDimensions();
+
   const appInfo = {
     version: '1.2.3',
     buildNumber: '2024.01.15',
-    lastUpdated: 'January 15, 2024',
   };
-
-  const teamMembers = [
-    {
-      id: '1',
-      name: 'Shabeer Ahmed',
-      role: 'Founder & CEO',
-      image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-    },
-    {
-      id: '2',
-      name: 'Sarah Johnson',
-      role: 'Head of Operations',
-      image: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg',
-    },
-    {
-      id: '3',
-      name: 'Michael Chen',
-      role: 'Tech Lead',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-    },
-  ];
 
   const socialLinks = [
     {
@@ -71,42 +59,204 @@ const About = () => {
     },
   ];
 
-  const legalLinks = [
+  const features = [
     {
       id: '1',
-      title: 'Terms of Service',
-      onPress: () => Linking.openURL('https://grociko.com/terms'),
+      icon: 'flash-outline',
+      text: 'Lightning-fast delivery in 30-120 minutes',
     },
     {
       id: '2',
-      title: 'Privacy Policy',
-      onPress: () => Linking.openURL('https://grociko.com/privacy'),
+      icon: 'leaf-outline',
+      text: 'Fresh, organic produce from local farms',
     },
     {
       id: '3',
-      title: 'Cookie Policy',
-      onPress: () => Linking.openURL('https://grociko.com/cookies'),
+      icon: 'shield-checkmark-outline',
+      text: 'Quality guaranteed or money back',
     },
     {
       id: '4',
-      title: 'Refund Policy',
-      onPress: () => Linking.openURL('https://grociko.com/refund'),
+      icon: 'card-outline',
+      text: 'Secure payment options including COD',
+    },
+    {
+      id: '5',
+      icon: 'people-outline',
+      text: '24/7 customer support',
     },
   ];
+
+  // Load about us data when screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      loadAboutData();
+    }, [])
+  );
+
+  const loadAboutData = async () => {
+    try {
+      setLoading(true);
+      const response = await getAboutUs();
+
+      console.log('📦 Full API Response:', response);
+
+      if (response.success && response.data) {
+        console.log('📋 Loaded About Data:', response.data);
+
+        if (response.data && (response.data.title || response.data.description)) {
+          setAboutData(response.data);
+        } else {
+          console.error('❌ Invalid data structure:', response.data);
+          Alert.alert('Error', 'Invalid data received from server');
+        }
+      } else {
+        console.error('❌ API Error:', response);
+        Alert.alert('Error', response.error || 'Failed to load About Us');
+      }
+    } catch (error) {
+      console.error('❌ Error loading about data:', error);
+      Alert.alert('Error', 'Failed to load About Us. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSocialPress = (url) => {
     Linking.openURL(url);
   };
 
   const handleRateApp = () => {
-    // In a real app, this would link to the app store
     Linking.openURL('https://play.google.com/store/apps/details?id=com.grociko.app');
   };
 
   const handleShareApp = () => {
-    // In a real app, this would use the native share API
     Linking.openURL('https://grociko.com/download');
   };
+
+  // Clean and format HTML content
+  const formatHtmlContent = (html) => {
+    if (!html) return '';
+    
+    // Wrap content in proper HTML structure for better rendering
+    let formattedHtml = html.trim();
+    
+    // Replace <br><br> with paragraph breaks for better spacing
+    formattedHtml = formattedHtml.replace(/<br\s*\/?>\s*<br\s*\/?>/gi, '</p><p>');
+    
+    // Wrap in paragraph tags if not already wrapped
+    if (!formattedHtml.startsWith('<p>')) {
+      formattedHtml = '<p>' + formattedHtml + '</p>';
+    }
+    
+    return formattedHtml;
+  };
+
+  // HTML rendering configuration
+  const htmlBaseStyle = {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
+    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
+  };
+
+  const htmlTagsStyles = {
+    body: htmlBaseStyle,
+    p: {
+      ...htmlBaseStyle,
+      marginBottom: theme.spacing.lg,
+    },
+    span: htmlBaseStyle,
+    div: htmlBaseStyle,
+    br: {
+      height: theme.spacing.sm,
+    },
+  };
+
+  // Beautiful Loading State
+  if (loading) {
+    return (
+      <SafeAreaWrapper>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>About</Text>
+            <View style={styles.headerRight} />
+          </View>
+
+          {/* Loading Animation */}
+          <View style={styles.loadingContainer}>
+            <View style={styles.loadingCard}>
+              {/* Animated Logo Placeholder */}
+              <View style={styles.loadingLogoContainer}>
+                <View style={styles.loadingLogo}>
+                  <ActivityIndicator size="large" color={theme.colors.primary.main} />
+                </View>
+              </View>
+
+              {/* Text Loading Animation */}
+              <View style={styles.loadingTextContainer}>
+                <View style={[styles.loadingBar, styles.loadingBarLarge]} />
+                <View style={[styles.loadingBar, styles.loadingBarMedium]} />
+                <View style={[styles.loadingBar, styles.loadingBarSmall]} />
+              </View>
+
+              {/* Loading Message */}
+              <Text style={styles.loadingText}>Loading About Us...</Text>
+
+              {/* Decorative Elements */}
+              <View style={styles.loadingDotsContainer}>
+                <View style={[styles.loadingDot, styles.loadingDot1]} />
+                <View style={[styles.loadingDot, styles.loadingDot2]} />
+                <View style={[styles.loadingDot, styles.loadingDot3]} />
+              </View>
+            </View>
+          </View>
+        </View>
+      </SafeAreaWrapper>
+    );
+  }
+
+  // Error State (No Data)
+  if (!aboutData) {
+    return (
+      <SafeAreaWrapper>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>About</Text>
+            <View style={styles.headerRight} />
+          </View>
+
+          <View style={styles.errorContainer}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={80}
+              color={theme.colors.text.tertiary}
+            />
+            <Text style={styles.errorTitle}>Unable to Load Content</Text>
+            <Text style={styles.errorText}>
+              We couldn't load the About Us information. Please try again.
+            </Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadAboutData}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaWrapper>
+    );
+  }
 
   return (
     <SafeAreaWrapper>
@@ -124,135 +274,200 @@ const About = () => {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* App Logo & Info */}
-          <View style={styles.appSection}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=60&h=60&fit=crop' }}
-                style={styles.appLogo}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.appName}>Grociko</Text>
-            <Text style={styles.appTagline}>Fresh groceries at your doorstep</Text>
-            <Text style={styles.appVersion}>Version {appInfo.version}</Text>
-          </View>
-
-          {/* About Us */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About Us</Text>
-            <Text style={styles.aboutText}>
-              Grociko is your trusted partner for fresh, high-quality groceries delivered right to your doorstep.
-              We're committed to making grocery shopping convenient, affordable, and sustainable for families across the region.
-              {'\n\n'}
-              Founded in 2023, we've grown from a small local startup to serving thousands of customers daily.
-              Our mission is to connect you with the freshest produce and everyday essentials while supporting local farmers and suppliers.
-            </Text>
-          </View>
-
-          {/* Team */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Our Team</Text>
-            <View style={styles.teamContainer}>
-              {teamMembers.map((member) => (
-                <View key={member.id} style={styles.teamMember}>
+          {/* Hero Section with Gradient */}
+          <View style={styles.heroSection}>
+            <View style={styles.heroGradient}>
+              {aboutData.image ? (
+                <Image
+                  source={{ uri: aboutData.image }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={{
+                    uri: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=400&fit=crop',
+                  }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={styles.heroOverlay} />
+              <View style={styles.heroContent}>
+                <View style={styles.logoContainer}>
                   <Image
-                    source={{ uri: member.image }}
-                    style={styles.teamMemberImage}
-                    resizeMode="cover"
+                    source={require('@/assets/company/logo1.png')}
+                    style={styles.appLogo}
+                    resizeMode="contain"
                   />
-                  <Text style={styles.teamMemberName}>{member.name}</Text>
-                  <Text style={styles.teamMemberRole}>{member.role}</Text>
+                </View>
+                <Text style={styles.appName}>Grociko</Text>
+                <Text style={styles.appTagline}>Fresh groceries at your doorstep</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* About Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons
+                name="information-circle"
+                size={24}
+                color={theme.colors.primary.main}
+              />
+              <Text style={styles.sectionTitle}>{aboutData.title || 'About Us'}</Text>
+            </View>
+
+            <View style={styles.contentCard}>
+              {/* Render HTML content */}
+              {aboutData.description && (
+                <View style={styles.htmlContainer}>
+                  <RenderHtml
+                    contentWidth={width - (theme.spacing.lg * 4)}
+                    source={{ html: formatHtmlContent(aboutData.description) }}
+                    tagsStyles={htmlTagsStyles}
+                    baseStyle={htmlBaseStyle}
+                    enableExperimentalMarginCollapsing={true}
+                  />
+                </View>
+              )}
+
+              {aboutData.created_date && (
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={theme.colors.text.tertiary}
+                  />
+               {/* {   <Text style={styles.infoText}>
+                    Established: {aboutData.created_date}
+                  </Text>} */}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Features Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="star" size={24} color={theme.colors.primary.main} />
+              <Text style={styles.sectionTitle}>What We Offer</Text>
+            </View>
+
+            <View style={styles.featuresGrid}>
+              {features.map((feature) => (
+                <View key={feature.id} style={styles.featureCard}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons
+                      name={feature.icon}
+                      size={24}
+                      color={theme.colors.primary.main}
+                    />
+                  </View>
+                  <Text style={styles.featureText}>{feature.text}</Text>
                 </View>
               ))}
             </View>
           </View>
 
-          {/* Features */}
+          {/* Connect Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>What We Offer</Text>
-            <View style={styles.featuresList}>
-              <View style={styles.featureItem}>
-                <Ionicons name="flash-outline" size={24} color={theme.colors.secondary.main} />
-                <Text style={styles.featureText}>Lightning-fast delivery in 30-120 minutes</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="leaf-outline" size={24} color={theme.colors.secondary.main} />
-                <Text style={styles.featureText}>Fresh, organic produce from local farms</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="shield-checkmark-outline" size={24} color={theme.colors.secondary.main} />
-                <Text style={styles.featureText}>Quality guaranteed or money back</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="card-outline" size={24} color={theme.colors.secondary.main} />
-                <Text style={styles.featureText}>Secure payment options including COD</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="people-outline" size={24} color={theme.colors.secondary.main} />
-                <Text style={styles.featureText}>24/7 customer support</Text>
-              </View>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="share-social" size={24} color={theme.colors.primary.main} />
+              <Text style={styles.sectionTitle}>Connect With Us</Text>
             </View>
-          </View>
 
-          {/* Social Media */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Connect With Us</Text>
-            <View style={styles.socialContainer}>
+            <View style={styles.socialGrid}>
               {socialLinks.map((social) => (
                 <TouchableOpacity
                   key={social.id}
-                  style={[styles.socialButton, { backgroundColor: `${social.color}20` }]}
+                  style={styles.socialCard}
                   onPress={() => handleSocialPress(social.url)}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons name={social.icon} size={24} color={social.color} />
-                  <Text style={[styles.socialText, { color: social.color }]}>
-                    {social.name}
-                  </Text>
+                  <View
+                    style={[
+                      styles.socialIconContainer,
+                      { backgroundColor: `${social.color}15` },
+                    ]}
+                  >
+                    <Ionicons name={social.icon} size={28} color={social.color} />
+                  </View>
+                  <Text style={styles.socialName}>{social.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          {/* Actions */}
+          {/* Actions Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Support Us</Text>
-            <TouchableOpacity style={styles.actionButton} onPress={handleRateApp}>
-              <Ionicons name="star-outline" size={24} color={theme.colors.secondary.main} />
-              <Text style={styles.actionButtonText}>Rate Our App</Text>
-              <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleShareApp}>
-              <Ionicons name="share-outline" size={24} color={theme.colors.secondary.main} />
-              <Text style={styles.actionButtonText}>Share With Friends</Text>
-              <Ionicons name="chevron-forward" size={20} color={theme.colors.text.tertiary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Legal */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Legal</Text>
-            <View style={styles.legalContainer}>
-              {legalLinks.map((link) => (
-                <TouchableOpacity
-                  key={link.id}
-                  style={styles.legalLink}
-                  onPress={link.onPress}
-                >
-                  <Text style={styles.legalLinkText}>{link.title}</Text>
-                  <Ionicons name="chevron-forward" size={16} color={theme.colors.text.tertiary} />
-                </TouchableOpacity>
-              ))}
+            <View style={styles.sectionHeader}>
+              <Ionicons name="heart" size={24} color={theme.colors.primary.main} />
+              <Text style={styles.sectionTitle}>Support Us</Text>
             </View>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={handleRateApp}
+              activeOpacity={0.7}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="star" size={24} color={theme.colors.status.warning} />
+              </View>
+              <View style={styles.actionContent}>
+                <Text style={styles.actionTitle}>Rate Our App</Text>
+                <Text style={styles.actionDescription}>
+                  Help us improve with your feedback
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={theme.colors.text.tertiary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={handleShareApp}
+              activeOpacity={0.7}
+            >
+              <View style={styles.actionIconContainer}>
+                <Ionicons
+                  name="share-social"
+                  size={24}
+                  color={theme.colors.secondary.main}
+                />
+              </View>
+              <View style={styles.actionContent}>
+                <Text style={styles.actionTitle}>Share With Friends</Text>
+                <Text style={styles.actionDescription}>
+                  Spread the word about Grociko
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={theme.colors.text.tertiary}
+              />
+            </TouchableOpacity>
           </View>
 
-          {/* App Info */}
-          <View style={styles.appInfoSection}>
-            <Text style={styles.appInfoText}>Build: {appInfo.buildNumber}</Text>
-            <Text style={styles.appInfoText}>Last Updated: {appInfo.lastUpdated}</Text>
-            <Text style={styles.copyright}>
-              © 2024 Grociko. All rights reserved.
-            </Text>
+          {/* App Info Footer */}
+          <View style={styles.footerSection}>
+            <View style={styles.footerCard}>
+              <View style={styles.footerRow}>
+                <Text style={styles.footerLabel}>Version</Text>
+                <Text style={styles.footerValue}>{appInfo.version}</Text>
+              </View>
+              <View style={styles.footerDivider} />
+              <View style={styles.footerRow}>
+                <Text style={styles.footerLabel}>Build</Text>
+                <Text style={styles.footerValue}>{appInfo.buildNumber}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.copyright}>© 2024 Grociko. All rights reserved.</Text>
           </View>
         </ScrollView>
       </View>
@@ -273,6 +488,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.lg,
+    backgroundColor: theme.colors.background.primary,
   },
   backButton: {
     width: 40,
@@ -293,47 +509,168 @@ const styles = StyleSheet.create({
     width: 40,
   },
 
+  // Loading Styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.xl,
+  },
+  loadingCard: {
+    width: '100%',
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius['2xl'],
+    padding: theme.spacing['3xl'],
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+  },
+  loadingLogoContainer: {
+    marginBottom: theme.spacing['3xl'],
+  },
+  loadingLogo: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: theme.colors.primary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingTextContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xl,
+    gap: theme.spacing.sm,
+  },
+  loadingBar: {
+    height: 12,
+    backgroundColor: theme.colors.surface.light,
+    borderRadius: theme.borderRadius.sm,
+  },
+  loadingBarLarge: {
+    width: '80%',
+  },
+  loadingBarMedium: {
+    width: '60%',
+  },
+  loadingBarSmall: {
+    width: '40%',
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing.lg,
+  },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  loadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primary.main,
+  },
+  loadingDot1: {
+    opacity: 1,
+  },
+  loadingDot2: {
+    opacity: 0.6,
+  },
+  loadingDot3: {
+    opacity: 0.3,
+  },
+
+  // Error Styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.xl,
+  },
+  errorTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontFamily: 'Outfit-SemiBold',
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing.xl,
+    marginBottom: theme.spacing.sm,
+  },
+  errorText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: theme.spacing.xl,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary.main,
+    paddingHorizontal: theme.spacing['3xl'],
+    paddingVertical: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+  },
+  retryButtonText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-SemiBold',
+    color: theme.colors.text.white,
+  },
+
   // Content Styles
   content: {
     flex: 1,
   },
 
-  // App Section
-  appSection: {
+  // Hero Section
+  heroSection: {
+    marginBottom: theme.spacing.xl,
+  },
+  heroGradient: {
+    height: 280,
+    position: 'relative',
+    backgroundColor: theme.colors.primary[50],
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  heroContent: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: theme.spacing['3xl'],
     paddingHorizontal: theme.spacing.lg,
   },
   logoContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: theme.colors.surface.light,
+    backgroundColor: theme.colors.background.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: theme.spacing.lg,
+    borderWidth: 3,
+    borderColor: theme.colors.primary.main,
   },
   appLogo: {
     width: 60,
     height: 60,
   },
   appName: {
-    fontSize: theme.typography.fontSize['2xl'],
+    fontSize: theme.typography.fontSize['3xl'],
     fontFamily: 'Outfit-Bold',
-    color: theme.colors.text.primary,
+    color: theme.colors.text.white,
     marginBottom: theme.spacing.xs,
   },
   appTagline: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.sm,
+    color: theme.colors.text.white,
     textAlign: 'center',
-  },
-  appVersion: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.tertiary,
   },
 
   // Section Styles
@@ -341,90 +678,110 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing['3xl'],
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
   sectionTitle: {
     fontSize: theme.typography.fontSize.lg,
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.text.primary,
-    marginBottom: theme.spacing.lg,
   },
 
-  // About Text
+  // Content Card
+  contentCard: {
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+  },
+  htmlContainer: {
+    marginBottom: theme.spacing.lg,
+  },
   aboutText: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
     lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
-  },
-
-  // Team Styles
-  teamContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    flexWrap: 'wrap',
-  },
-  teamMember: {
-    alignItems: 'center',
     marginBottom: theme.spacing.lg,
   },
-  teamMemberImage: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.surface.divider,
+  },
+  infoText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.tertiary,
+  },
+
+  // Features Grid
+  featuresGrid: {
+    gap: theme.spacing.sm,
+  },
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+    gap: theme.spacing.lg,
+  },
+  featureIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.primary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  featureText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
+  },
+
+  // Social Grid
+  socialGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  socialCard: {
+    width: '48%',
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+  },
+  socialIconContainer: {
     width: 60,
     height: 60,
     borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: theme.spacing.sm,
-    borderWidth: 2,
-    borderColor: theme.colors.secondary.main,
   },
-  teamMemberName: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
-    textAlign: 'center',
-  },
-  teamMemberRole: {
-    fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.secondary,
-    textAlign: 'center',
-  },
-
-  // Features Styles
-  featuresList: {
-    gap: theme.spacing.lg,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.lg,
-  },
-  featureText: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.secondary,
-    flex: 1,
-  },
-
-  // Social Styles
-  socialContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.lg,
-    gap: theme.spacing.sm,
-  },
-  socialText: {
+  socialName: {
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-Medium',
+    color: theme.colors.text.primary,
   },
 
-  // Action Button Styles
-  actionButton: {
+  // Action Card
+  actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface.card,
@@ -434,54 +791,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
   },
-  actionButtonText: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Medium',
-    color: theme.colors.text.primary,
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.lg,
+  },
+  actionContent: {
     flex: 1,
-    marginLeft: theme.spacing.lg,
   },
-
-  // Legal Styles
-  legalContainer: {
-    backgroundColor: theme.colors.surface.card,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.surface.border,
-    overflow: 'hidden',
-  },
-  legalLink: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.surface.divider,
-  },
-  legalLinkText: {
+  actionTitle: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: 'Outfit-SemiBold',
     color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs,
+  },
+  actionDescription: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
   },
 
-  // App Info
-  appInfoSection: {
-    alignItems: 'center',
+  // Footer Section
+  footerSection: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing['6xl'],
   },
-  appInfoText: {
+  footerCard: {
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  footerLabel: {
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.tertiary,
-    marginBottom: theme.spacing.xs,
+    color: theme.colors.text.secondary,
+  },
+  footerValue: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'Outfit-SemiBold',
+    color: theme.colors.text.primary,
+  },
+  footerDivider: {
+    height: 1,
+    backgroundColor: theme.colors.surface.divider,
+    marginVertical: theme.spacing.xs,
   },
   copyright: {
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.tertiary,
-    marginTop: theme.spacing.lg,
     textAlign: 'center',
   },
 });

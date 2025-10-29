@@ -1,10 +1,15 @@
-import SafeAreaWrapper from '@/components/SafeAreaWrapper';
-import { createSignupFormData, signupUser, validateImageFile } from '@/services/apiService';
-import theme from '@/utils/theme';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import SafeAreaWrapper from "@/components/SafeAreaWrapper";
+import { useUser } from "@/providers/UserProvider";
+import {
+  createSignupFormData,
+  signupUser,
+  validateImageFile,
+} from "@/services/apiService";
+import theme from "@/utils/theme";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
+import { useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -17,18 +22,21 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 const SignUp = () => {
+  // Get user context
+  const { loginUser: loginUserContext } = useUser();
+
   // Form fields
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [profileImage, setProfileImage] = useState(null);
 
   // UI states
@@ -38,11 +46,15 @@ const SignUp = () => {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
 
   // Toast state
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'error' });
+  const [toast, setToast] = useState({
+    visible: false,
+    message: "",
+    type: "error",
+  });
   const toastAnim = useRef(new Animated.Value(0)).current;
 
   // Show toast notification
-  const showToast = (message, type = 'error') => {
+  const showToast = (message, type = "error") => {
     setToast({ visible: true, message, type });
 
     Animated.sequence([
@@ -58,17 +70,17 @@ const SignUp = () => {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setToast({ visible: false, message: '', type: 'error' });
+      setToast({ visible: false, message: "", type: "error" });
     });
   };
 
   // Error states
-  const [nameError, setNameError] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [usernameError, setUsernameError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [nameError, setNameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
   // Validation functions
   const validateEmail = (email) => {
@@ -78,7 +90,7 @@ const SignUp = () => {
 
   const validatePhone = (phone) => {
     const phoneRegex = /^[0-9]{10,15}$/;
-    return phoneRegex.test(phone.replace(/\s/g, ''));
+    return phoneRegex.test(phone.replace(/\s/g, ""));
   };
 
   const validatePassword = (password) => {
@@ -93,16 +105,17 @@ const SignUp = () => {
   const pickImage = async () => {
     try {
       // Request permission
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (permissionResult.granted === false) {
-        showToast('Permission to access camera roll is required!', 'error');
+        showToast("Permission to access camera roll is required!", "error");
         return;
       }
 
       // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -118,15 +131,15 @@ const SignUp = () => {
         });
 
         if (!validation.isValid) {
-          showToast(validation.errors.join('. '), 'error');
+          showToast(validation.errors.join(". "), "error");
           return;
         }
 
         setProfileImage(selectedImage);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      showToast('Failed to pick image. Please try again.', 'error');
+      console.error("Error picking image:", error);
+      showToast("Failed to pick image. Please try again.", "error");
     }
   };
 
@@ -138,72 +151,72 @@ const SignUp = () => {
   // Handle signup
   const handleSignUp = async () => {
     // Reset errors
-    setNameError('');
-    setEmailError('');
-    setPhoneError('');
-    setUsernameError('');
-    setPasswordError('');
-    setConfirmPasswordError('');
+    setNameError("");
+    setEmailError("");
+    setPhoneError("");
+    setUsernameError("");
+    setPasswordError("");
+    setConfirmPasswordError("");
 
     let hasError = false;
 
     // Name validation
     if (!name.trim()) {
-      setNameError('Full name is required');
+      setNameError("Full name is required");
       hasError = true;
     } else if (name.trim().length < 2) {
-      setNameError('Name must be at least 2 characters');
+      setNameError("Name must be at least 2 characters");
       hasError = true;
     }
 
     // Email validation
     if (!email.trim()) {
-      setEmailError('Email is required');
+      setEmailError("Email is required");
       hasError = true;
     } else if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address');
+      setEmailError("Please enter a valid email address");
       hasError = true;
     }
 
     // Phone validation
     if (!phone.trim()) {
-      setPhoneError('Phone number is required');
+      setPhoneError("Phone number is required");
       hasError = true;
     } else if (!validatePhone(phone)) {
-      setPhoneError('Please enter a valid phone number (10-15 digits)');
+      setPhoneError("Please enter a valid phone number (10-15 digits)");
       hasError = true;
     }
 
     // Username validation
     if (!username.trim()) {
-      setUsernameError('Username is required');
+      setUsernameError("Username is required");
       hasError = true;
     } else if (!validateUsername(username)) {
-      setUsernameError('Username must be at least 3 characters');
+      setUsernameError("Username must be at least 3 characters");
       hasError = true;
     }
 
     // Password validation
     if (!password.trim()) {
-      setPasswordError('Password is required');
+      setPasswordError("Password is required");
       hasError = true;
     } else if (!validatePassword(password)) {
-      setPasswordError('Password must be at least 6 characters');
+      setPasswordError("Password must be at least 6 characters");
       hasError = true;
     }
 
     // Confirm password validation
     if (!confirmPassword.trim()) {
-      setConfirmPasswordError('Please confirm your password');
+      setConfirmPasswordError("Please confirm your password");
       hasError = true;
     } else if (password !== confirmPassword) {
-      setConfirmPasswordError('Passwords do not match');
+      setConfirmPasswordError("Passwords do not match");
       hasError = true;
     }
 
     // Terms agreement
     if (!agreeToTerms) {
-      showToast('Please agree to Terms & Conditions to continue', 'error');
+      showToast("Please agree to Terms & Conditions to continue", "error");
       return;
     }
 
@@ -229,21 +242,27 @@ const SignUp = () => {
       const response = await signupUser(formData);
 
       if (response.success) {
-        showToast(response.message || 'Account created successfully!', 'success');
+        // Save user to context
+        await loginUserContext(response.data, response.jwt);
+
+        showToast(
+          response.message || "Account created successfully!",
+          "success"
+        );
         setTimeout(() => {
-          router.replace('/(tabs)/home');
+          router.replace("/(tabs)/home");
         }, 1500);
       } else {
         // Show errors
         const errorMessage = Array.isArray(response.errors)
-          ? response.errors.join('. ')
+          ? response.errors.join(". ")
           : response.error;
 
-        showToast(errorMessage, 'error');
+        showToast(errorMessage, "error");
       }
     } catch (error) {
-      console.error('Signup error:', error);
-      showToast('An unexpected error occurred. Please try again.', 'error');
+      console.error("Signup error:", error);
+      showToast("An unexpected error occurred. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -251,7 +270,7 @@ const SignUp = () => {
 
   const formatPhoneNumber = (text) => {
     // Remove non-numeric characters
-    const cleaned = text.replace(/\D/g, '');
+    const cleaned = text.replace(/\D/g, "");
 
     // Limit to 15 digits
     return cleaned.slice(0, 15);
@@ -261,7 +280,7 @@ const SignUp = () => {
     <SafeAreaWrapper backgroundColor={theme.colors.background.primary}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -269,15 +288,24 @@ const SignUp = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={24} color={theme.colors.text.primary} />
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={24}
+                color={theme.colors.text.primary}
+              />
             </TouchableOpacity>
           </View>
 
           {/* Title Section */}
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to get started with fresh groceries</Text>
+            <Text style={styles.subtitle}>
+              Sign up to get started with fresh groceries
+            </Text>
           </View>
 
           {/* Profile Image Picker */}
@@ -296,13 +324,21 @@ const SignUp = () => {
                     style={styles.removeImageButton}
                     onPress={removeImage}
                   >
-                    <Ionicons name="close-circle" size={28} color={theme.colors.status.error} />
+                    <Ionicons
+                      name="close-circle"
+                      size={28}
+                      color={theme.colors.status.error}
+                    />
                   </TouchableOpacity>
                 </View>
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <View style={styles.cameraIconContainer}>
-                    <Ionicons name="camera" size={32} color={theme.colors.primary.main} />
+                    <Ionicons
+                      name="camera"
+                      size={32}
+                      color={theme.colors.primary.main}
+                    />
                   </View>
                   <Text style={styles.addPhotoText}>Add Profile Photo</Text>
                   <Text style={styles.addPhotoSubtext}>Optional</Text>
@@ -310,32 +346,46 @@ const SignUp = () => {
               )}
             </TouchableOpacity>
           </View>
-<View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <View style={[styles.inputWrapper, usernameError && styles.inputError]}>
-                <Ionicons name="at-outline" size={20} color={theme.colors.text.secondary} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Choose a username"
-                  placeholderTextColor={theme.colors.text.placeholder}
-                  value={username}
-                  onChangeText={(text) => {
-                    setUsername(text);
-                    if (usernameError) setUsernameError('');
-                  }}
-                  autoCapitalize="none"
-                  autoComplete="username"
-                />
-              </View>
-              {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Username</Text>
+            <View
+              style={[styles.inputWrapper, usernameError && styles.inputError]}
+            >
+              <Ionicons
+                name="at-outline"
+                size={20}
+                color={theme.colors.text.secondary}
+              />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Choose a username"
+                placeholderTextColor={theme.colors.text.placeholder}
+                value={username}
+                onChangeText={(text) => {
+                  setUsername(text);
+                  if (usernameError) setUsernameError("");
+                }}
+                autoCapitalize="none"
+                autoComplete="username"
+              />
             </View>
+            {usernameError ? (
+              <Text style={styles.errorText}>{usernameError}</Text>
+            ) : null}
+          </View>
           {/* Form Section */}
           <View style={styles.formSection}>
             {/* Name Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Full Name</Text>
-              <View style={[styles.inputWrapper, nameError && styles.inputError]}>
-                <Ionicons name="person-outline" size={20} color={theme.colors.text.secondary} />
+              <View
+                style={[styles.inputWrapper, nameError && styles.inputError]}
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter your full name"
@@ -343,20 +393,28 @@ const SignUp = () => {
                   value={name}
                   onChangeText={(text) => {
                     setName(text);
-                    if (nameError) setNameError('');
+                    if (nameError) setNameError("");
                   }}
                   autoCapitalize="words"
                   autoComplete="name"
                 />
               </View>
-              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+              {nameError ? (
+                <Text style={styles.errorText}>{nameError}</Text>
+              ) : null}
             </View>
 
             {/* Email Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.inputWrapper, emailError && styles.inputError]}>
-                <Ionicons name="mail-outline" size={20} color={theme.colors.text.secondary} />
+              <View
+                style={[styles.inputWrapper, emailError && styles.inputError]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter your email"
@@ -364,21 +422,29 @@ const SignUp = () => {
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
-                    if (emailError) setEmailError('');
+                    if (emailError) setEmailError("");
                   }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
                 />
               </View>
-              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
             </View>
 
             {/* Phone Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Phone Number</Text>
-              <View style={[styles.inputWrapper, phoneError && styles.inputError]}>
-                <Ionicons name="call-outline" size={20} color={theme.colors.text.secondary} />
+              <View
+                style={[styles.inputWrapper, phoneError && styles.inputError]}
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter phone number"
@@ -387,24 +453,34 @@ const SignUp = () => {
                   onChangeText={(text) => {
                     const formatted = formatPhoneNumber(text);
                     setPhone(formatted);
-                    if (phoneError) setPhoneError('');
+                    if (phoneError) setPhoneError("");
                   }}
                   keyboardType="phone-pad"
                   autoComplete="tel"
                   maxLength={15}
                 />
               </View>
-              {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+              {phoneError ? (
+                <Text style={styles.errorText}>{phoneError}</Text>
+              ) : null}
             </View>
 
             {/* Username Input */}
-            
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
-              <View style={[styles.inputWrapper, passwordError && styles.inputError]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text.secondary} />
+              <View
+                style={[
+                  styles.inputWrapper,
+                  passwordError && styles.inputError,
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder="Create password"
@@ -412,7 +488,7 @@ const SignUp = () => {
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
-                    if (passwordError) setPasswordError('');
+                    if (passwordError) setPasswordError("");
                   }}
                   secureTextEntry={!showPassword}
                   autoComplete="password-new"
@@ -422,21 +498,34 @@ const SignUp = () => {
                   onPress={() => setShowPassword(!showPassword)}
                 >
                   <Ionicons
-                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
                     size={20}
                     color={theme.colors.text.secondary}
                   />
                 </TouchableOpacity>
               </View>
-              {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-              <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
+              <Text style={styles.passwordHint}>
+                Must be at least 6 characters
+              </Text>
             </View>
 
             {/* Confirm Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Confirm Password</Text>
-              <View style={[styles.inputWrapper, confirmPasswordError && styles.inputError]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text.secondary} />
+              <View
+                style={[
+                  styles.inputWrapper,
+                  confirmPasswordError && styles.inputError,
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={theme.colors.text.secondary}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder="Confirm your password"
@@ -444,7 +533,7 @@ const SignUp = () => {
                   value={confirmPassword}
                   onChangeText={(text) => {
                     setConfirmPassword(text);
-                    if (confirmPasswordError) setConfirmPasswordError('');
+                    if (confirmPasswordError) setConfirmPasswordError("");
                   }}
                   secureTextEntry={!showConfirmPassword}
                   autoComplete="password-new"
@@ -454,13 +543,17 @@ const SignUp = () => {
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
                   <Ionicons
-                    name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
+                    name={
+                      showConfirmPassword ? "eye-outline" : "eye-off-outline"
+                    }
                     size={20}
                     color={theme.colors.text.secondary}
                   />
                 </TouchableOpacity>
               </View>
-              {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+              {confirmPasswordError ? (
+                <Text style={styles.errorText}>{confirmPasswordError}</Text>
+              ) : null}
             </View>
 
             {/* Terms and Conditions */}
@@ -469,15 +562,20 @@ const SignUp = () => {
               onPress={() => setAgreeToTerms(!agreeToTerms)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, agreeToTerms && styles.checkedBox]}>
+              <View
+                style={[styles.checkbox, agreeToTerms && styles.checkedBox]}
+              >
                 {agreeToTerms && (
-                  <Ionicons name="checkmark" size={16} color={theme.colors.text.white} />
+                  <Ionicons
+                    name="checkmark"
+                    size={16}
+                    color={theme.colors.text.white}
+                  />
                 )}
               </View>
               <Text style={styles.termsText}>
-                I agree to the{' '}
-                <Text style={styles.termsLink}>Terms & Conditions</Text>
-                {' '}and{' '}
+                I agree to the{" "}
+                <Text style={styles.termsLink}>Terms & Conditions</Text> and{" "}
                 <Text style={styles.termsLink}>Privacy Policy</Text>
               </Text>
             </TouchableOpacity>
@@ -496,7 +594,11 @@ const SignUp = () => {
               ) : (
                 <>
                   <Text style={styles.signUpButtonText}>Create Account</Text>
-                  <Ionicons name="arrow-forward" size={20} color={theme.colors.text.white} />
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={theme.colors.text.white}
+                  />
                 </>
               )}
             </TouchableOpacity>
@@ -505,7 +607,7 @@ const SignUp = () => {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/signin')}>
+            <TouchableOpacity onPress={() => router.push("/(auth)/signin")}>
               <Text style={styles.signInLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
@@ -516,8 +618,8 @@ const SignUp = () => {
           <Animated.View
             style={[
               styles.toastContainer,
-              toast.type === 'success' && styles.toastSuccess,
-              toast.type === 'info' && styles.toastInfo,
+              toast.type === "success" && styles.toastSuccess,
+              toast.type === "info" && styles.toastInfo,
               {
                 opacity: toastAnim,
                 transform: [
@@ -533,11 +635,11 @@ const SignUp = () => {
           >
             <Ionicons
               name={
-                toast.type === 'success'
-                  ? 'checkmark-circle'
-                  : toast.type === 'info'
-                  ? 'information-circle'
-                  : 'alert-circle'
+                toast.type === "success"
+                  ? "checkmark-circle"
+                  : toast.type === "info"
+                  ? "information-circle"
+                  : "alert-circle"
               }
               size={24}
               color={theme.colors.text.white}
@@ -557,7 +659,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: theme.spacing.xl,
-    paddingBottom: theme.spacing['2xl'],
+    paddingBottom: theme.spacing["2xl"],
   },
 
   // Header
@@ -570,8 +672,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surface.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
   },
@@ -581,22 +683,22 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   mainTitle: {
-    fontSize: theme.typography.fontSize['4xl'],
-    fontFamily: 'Outfit-Bold',
+    fontSize: theme.typography.fontSize["4xl"],
+    fontFamily: "Outfit-Bold",
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
   },
   subtitle: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
     lineHeight: theme.typography.fontSize.base * 1.5,
   },
 
   // Image Picker Section
   imagePickerSection: {
-    alignItems: 'center',
-    marginBottom: theme.spacing['2xl'],
+    alignItems: "center",
+    marginBottom: theme.spacing["2xl"],
   },
   imagePickerContainer: {
     width: 120,
@@ -605,7 +707,7 @@ const styles = StyleSheet.create({
   selectedImageContainer: {
     width: 120,
     height: 120,
-    position: 'relative',
+    position: "relative",
   },
   selectedImage: {
     width: 120,
@@ -615,7 +717,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary.main,
   },
   removeImageButton: {
-    position: 'absolute',
+    position: "absolute",
     top: -4,
     right: -4,
     backgroundColor: theme.colors.surface.white,
@@ -628,22 +730,22 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary[50],
     borderWidth: 2,
     borderColor: theme.colors.primary.main,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
   },
   cameraIconContainer: {
     marginBottom: theme.spacing.xs,
   },
   addPhotoText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.primary.main,
-    textAlign: 'center',
+    textAlign: "center",
   },
   addPhotoSubtext: {
     fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.tertiary,
     marginTop: 2,
   },
@@ -657,13 +759,13 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.sm,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: theme.colors.surface.input,
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing.lg,
@@ -673,12 +775,12 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: theme.colors.status.error,
-    backgroundColor: theme.colors.status.error + '10',
+    backgroundColor: theme.colors.status.error + "10",
   },
   textInput: {
     flex: 1,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.primary,
     marginLeft: theme.spacing.md,
   },
@@ -687,14 +789,14 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.status.error,
     marginTop: theme.spacing.xs,
     marginLeft: theme.spacing.sm,
   },
   passwordHint: {
     fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.tertiary,
     marginTop: theme.spacing.xs,
     marginLeft: theme.spacing.sm,
@@ -702,8 +804,8 @@ const styles = StyleSheet.create({
 
   // Terms
   termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: theme.spacing.xl,
     paddingVertical: theme.spacing.sm,
   },
@@ -714,8 +816,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
     borderRadius: theme.borderRadius.sm,
     marginRight: theme.spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 2,
   },
   checkedBox: {
@@ -725,13 +827,13 @@ const styles = StyleSheet.create({
   termsText: {
     flex: 1,
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
   termsLink: {
     color: theme.colors.primary.main,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
   },
 
   // Sign Up Button
@@ -740,9 +842,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing.xl,
     height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: theme.spacing.xl,
   },
   buttonDisabled: {
@@ -750,51 +852,51 @@ const styles = StyleSheet.create({
   },
   signUpButtonText: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.white,
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingText: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: "Outfit-Medium",
     color: theme.colors.text.white,
   },
 
   // Footer
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: theme.spacing.xl,
   },
   footerText: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
   signInLink: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.primary.main,
   },
 
   // Toast Notification
   toastContainer: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 40 : 20,
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 40 : 20,
     left: 20,
     right: 20,
     backgroundColor: theme.colors.status.error,
     borderRadius: theme.borderRadius.lg,
     paddingVertical: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -808,7 +910,7 @@ const styles = StyleSheet.create({
   },
   toastText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: "Outfit-Medium",
     color: theme.colors.text.white,
     marginLeft: theme.spacing.md,
     flex: 1,

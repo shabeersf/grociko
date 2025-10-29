@@ -3,7 +3,8 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(wc:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

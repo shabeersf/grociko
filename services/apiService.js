@@ -340,8 +340,6 @@ export const loginUser = async (loginPayload) => {
   }
 };
 
-
-
 /**
  * Create FormData from signup form
  */
@@ -630,6 +628,350 @@ export const getProductById = async (productId) => {
   }
 };
 
+/**
+ * Get User Profile by ID
+ */
+export const getUserProfile = async (userId) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("👤 Fetching user profile:", userId);
+
+    const response = await makeRequest(`/get-user.php?user_id=${userId}`, {
+      method: "GET",
+      headers,
+    });
+
+    console.log("📥 User Profile Response:", {
+      success: response.success,
+      statusCode: response.statusCode,
+      hasData: !!response.data,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } else if (response.data?.response_code === 220) {
+      return {
+        success: false,
+        error: response.data?.message || "User not found",
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch user profile",
+      };
+    }
+  } catch (error) {
+    console.error("❌ User Profile Fetch Error:", error);
+    return handleApiError(error, "/get-user.php");
+  }
+};
+
+/**
+ * Update User Profile
+ */
+export const updateUserProfile = async (userId, formData) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("📤 Updating user profile:", userId);
+
+    const response = await makeRequest("/update-user.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    console.log("📥 Update Profile Response:", {
+      success: response.success,
+      statusCode: response.statusCode,
+      hasData: !!response.data,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      // Update local user data
+      const updatedUser = response.data.data;
+      const jwt = await getJwtToken();
+      await saveUserData(updatedUser, jwt);
+
+      return {
+        success: true,
+        data: updatedUser,
+        message: "Profile updated successfully!",
+      };
+    } else {
+      return {
+        success: false,
+        error:
+          response.data?.message ||
+          response.error ||
+          "Failed to update profile",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Update Profile Error:", error);
+    return handleApiError(error, "/update-user.php");
+  }
+};
+
+export const setDefaultAddress = async (addressId, userId) => {
+  try {
+    const formData = new FormData();
+    formData.append("id", addressId);
+    formData.append("user_id", userId);
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("⭐ Setting default address:", addressId);
+
+    const response = await makeRequest("/set-default-address.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: "Default address updated successfully",
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to set default address",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Set Default Address Error:", error);
+    return handleApiError(error, "/set-default-address.php");
+  }
+};
+
+/**
+ * Get User Addresses
+ */
+export const getUserAddresses = async (userId) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("📍 Fetching user addresses:", userId);
+
+    const response = await makeRequest(
+      `/get-user-address.php?user_id=${userId}`,
+      {
+        method: "GET",
+        headers,
+      }
+    );
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch addresses",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Address Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Create User Address
+ */
+export const createUserAddress = async (addressData) => {
+  try {
+    const formData = new FormData();
+    formData.append("user_id", addressData.user_id);
+    formData.append("address1", addressData.address1 || "");
+    formData.append("address2", addressData.address2 || "");
+    formData.append("address3", addressData.address3 || "");
+    formData.append("city", addressData.city || "");
+    formData.append("pincode", addressData.pincode || "");
+    formData.append("landmark", addressData.landmark || "");
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("📝 Creating address");
+
+    const response = await makeRequest("/create-address.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: "Address created successfully",
+      };
+    } else {
+      return {
+        success: false,
+        error:
+          response.data?.data?.err?.join(", ") ||
+          response.error ||
+          "Failed to create address",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Create Address Error:", error);
+    return handleApiError(error, "/create-address.php");
+  }
+};
+
+/**
+ * Update User Address
+ */
+export const updateUserAddress = async (addressData) => {
+  try {
+    const formData = new FormData();
+    formData.append("id", addressData.id);
+    formData.append("user_id", addressData.user_id);
+    formData.append("address1", addressData.address1 || "");
+    formData.append("address2", addressData.address2 || "");
+    formData.append("address3", addressData.address3 || "");
+    formData.append("city", addressData.city || "");
+    formData.append("pincode", addressData.pincode || "");
+    formData.append("landmark", addressData.landmark || "");
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("✏️ Updating address:", addressData.id);
+
+    const response = await makeRequest("/update-address.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: "Address updated successfully",
+      };
+    } else {
+      return {
+        success: false,
+        error:
+          response.data?.data?.err?.join(", ") ||
+          response.error ||
+          "Failed to update address",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Update Address Error:", error);
+    return handleApiError(error, "/update-address.php");
+  }
+};
+
+/**
+ * Delete User Address
+ */
+export const deleteUserAddress = async (addressId, userId) => {
+  try {
+    const formData = new FormData();
+    formData.append("id", addressId);
+    formData.append("user_id", userId);
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("🗑️ Deleting address:", addressId);
+
+    const response = await makeRequest("/delete-address.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        message: "Address deleted successfully",
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to delete address",
+      };
+    }
+  } catch (error) {
+    console.error("❌ Delete Address Error:", error);
+    return handleApiError(error, "/delete-address.php");
+  }
+};
+/**
+ * Get About Us Page
+ */
+export const getAboutUs = async () => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("ℹ️ Fetching About Us page");
+
+    const response = await makeRequest("/get-about-us.php", {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      // Handle nested data - API may return data under empty string key or as array
+      const dataValue = response.data.data[''] ||
+                       (Array.isArray(response.data.data) ? response.data.data[0] : null) ||
+                       null;
+
+      return {
+        success: true,
+        data: dataValue,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch About Us",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ About Us Fetch Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
 // Export storage keys for external use if needed
 export { STORAGE_KEYS };
 

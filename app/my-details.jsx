@@ -1,9 +1,12 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { getUserData, updateUserProfile } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -18,16 +21,58 @@ import {
 
 const MyDetails = () => {
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  
   const [formData, setFormData] = useState({
-    firstName: 'Shabeer',
-    lastName: 'Ahmed',
-    email: 'shabeer@grociko.com',
-    phone: '+880 1234567890',
-    dateOfBirth: '1990-05-15',
-    gender: 'Male',
+    name: '',
+    username: '',
+    email: '',
+    phone: '',
+    photo: null,
   });
 
   const [originalData, setOriginalData] = useState(formData);
+
+  // Load user data when screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      const user = await getUserData();
+      
+      if (!user) {
+        router.replace('/signin');
+        return;
+      }
+
+      setUserData(user);
+      
+      // Set form data from user data
+      const data = {
+        name: user.name || '',
+        username: user.username || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        photo: user.photo || null,
+      };
+      
+      setFormData(data);
+      setOriginalData(data);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      Alert.alert('Error', 'Failed to load user data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = () => {
     setOriginalData(formData);
@@ -36,11 +81,13 @@ const MyDetails = () => {
 
   const handleCancel = () => {
     setFormData(originalData);
+    setSelectedImage(null);
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
+  const handleSave = async () => {
+    // Validation
+    if (!formData.name || !formData.email || !formData.phone) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -52,24 +99,118 @@ const MyDetails = () => {
       return;
     }
 
-    // Phone validation
+    // Phone validation (10-15 digits)
     const phoneRegex = /^\+?\d{10,15}$/;
     if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
 
-    // Save logic here
-    setIsEditing(false);
-    Alert.alert('Success', 'Your details have been updated successfully');
+    try {
+      setSaving(true);
+
+      // Create FormData for API request
+      const updateFormData = new FormData();
+      updateFormData.append('id', userData.id);
+      updateFormData.append('name', formData.name);
+      updateFormData.append('username', formData.username || formData.name);
+      updateFormData.append('email', formData.email);
+      updateFormData.append('phone', formData.phone);
+
+      // Add image if selected
+      if (selectedImage) {
+        const filename = selectedImage.uri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+        updateFormData.append('photo', {
+          uri: selectedImage.uri,
+          name: filename,
+          type: type,
+        });
+      }
+
+      // Call update API
+      const response = await updateUserProfile(userData.id, updateFormData);
+
+      if (response.success) {
+        Alert.alert('Success', 'Your details have been updated successfully', [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsEditing(false);
+              loadUserData(); // Reload user data
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Error', response.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleImagePicker = () => {
-    // Image picker logic would go here
-    Alert.alert('Photo', 'Image picker functionality would be implemented here');
+  const handleImagePicker = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please grant camera roll permissions to change your profile photo.'
+        );
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0]);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
   };
 
-  const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
+  // Get profile image URI
+  const getProfileImageUri = () => {
+    if (selectedImage) {
+      return selectedImage.uri;
+    }
+    if (formData.photo) {
+      return `https://work.phpwebsites.in/grociko/photos/large/${formData.photo}`;
+    }
+    return 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
+  };
+
+  // Show loading indicator
+  if (loading) {
+    return (
+      <SafeAreaWrapper>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary.main} />
+          <Text style={styles.loadingText}>Loading your details...</Text>
+        </View>
+      </SafeAreaWrapper>
+    );
+  }
+
+  // If no user data, don't render
+  if (!userData) {
+    return null;
+  }
 
   return (
     <SafeAreaWrapper>
@@ -89,12 +230,17 @@ const MyDetails = () => {
           <TouchableOpacity
             style={styles.editButton}
             onPress={isEditing ? handleSave : handleEdit}
+            disabled={saving}
           >
-            <Ionicons
-              name={isEditing ? 'checkmark' : 'pencil'}
-              size={20}
-              color={theme.colors.secondary.main}
-            />
+            {saving ? (
+              <ActivityIndicator size="small" color={theme.colors.secondary.main} />
+            ) : (
+              <Ionicons
+                name={isEditing ? 'checkmark' : 'pencil'}
+                size={20}
+                color={theme.colors.secondary.main}
+              />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -103,9 +249,7 @@ const MyDetails = () => {
           <View style={styles.profileSection}>
             <View style={styles.profileImageContainer}>
               <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-                }}
+                source={{ uri: getProfileImageUri() }}
                 style={styles.profileImage}
                 resizeMode="cover"
               />
@@ -118,41 +262,38 @@ const MyDetails = () => {
                 </TouchableOpacity>
               )}
             </View>
-            <Text style={styles.profileName}>
-              {formData.firstName} {formData.lastName}
-            </Text>
-            <Text style={styles.profileEmail}>{formData.email}</Text>
+            <Text style={styles.profileName}>{formData.name || 'User'}</Text>
+            <Text style={styles.profileEmail}>{formData.email || 'No email'}</Text>
           </View>
 
           {/* Form Section */}
           <View style={styles.formContainer}>
-            {/* First Name */}
+            {/* Full Name */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
-                First Name <Text style={styles.required}>*</Text>
+                Full Name <Text style={styles.required}>*</Text>
               </Text>
               <TextInput
                 style={[styles.textInput, !isEditing && styles.disabledInput]}
-                value={formData.firstName}
-                onChangeText={(text) => setFormData({ ...formData, firstName: text })}
-                placeholder="Enter your first name"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                placeholder="Enter your full name"
                 placeholderTextColor={theme.colors.text.placeholder}
                 editable={isEditing}
                 selectTextOnFocus={isEditing}
               />
             </View>
 
-            {/* Last Name */}
+            {/* Username */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                Last Name <Text style={styles.required}>*</Text>
-              </Text>
+              <Text style={styles.inputLabel}>Username</Text>
               <TextInput
                 style={[styles.textInput, !isEditing && styles.disabledInput]}
-                value={formData.lastName}
-                onChangeText={(text) => setFormData({ ...formData, lastName: text })}
-                placeholder="Enter your last name"
+                value={formData.username}
+                onChangeText={(text) => setFormData({ ...formData, username: text })}
+                placeholder="Enter your username"
                 placeholderTextColor={theme.colors.text.placeholder}
+                autoCapitalize="none"
                 editable={isEditing}
                 selectTextOnFocus={isEditing}
               />
@@ -193,63 +334,29 @@ const MyDetails = () => {
               />
             </View>
 
-            {/* Date of Birth */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date of Birth</Text>
-              <TextInput
-                style={[styles.textInput, !isEditing && styles.disabledInput]}
-                value={formData.dateOfBirth}
-                onChangeText={(text) => setFormData({ ...formData, dateOfBirth: text })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={theme.colors.text.placeholder}
-                editable={isEditing}
-                selectTextOnFocus={isEditing}
-              />
-            </View>
-
-            {/* Gender */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Gender</Text>
-              {isEditing ? (
-                <View style={styles.genderContainer}>
-                  {genderOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.genderOption,
-                        formData.gender === option && styles.selectedGenderOption,
-                      ]}
-                      onPress={() => setFormData({ ...formData, gender: option })}
-                    >
-                      <Text
-                        style={[
-                          styles.genderOptionText,
-                          formData.gender === option && styles.selectedGenderOptionText,
-                        ]}
-                      >
-                        {option}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <TextInput
-                  style={[styles.textInput, styles.disabledInput]}
-                  value={formData.gender}
-                  editable={false}
-                />
-              )}
-            </View>
+           
           </View>
 
           {/* Action Buttons */}
           {isEditing && (
             <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancel}
+                disabled={saving}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={theme.colors.text.white} />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -263,6 +370,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background.primary,
+  },
+
+  // Loading Styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background.primary,
+  },
+  loadingText: {
+    marginTop: theme.spacing.lg,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'Outfit-Regular',
+    color: theme.colors.text.secondary,
   },
 
   // Header Styles
@@ -378,31 +499,30 @@ const styles = StyleSheet.create({
     color: theme.colors.text.secondary,
   },
 
-  // Gender Styles
-  genderContainer: {
+  // Status Styles
+  statusContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
   },
-  genderOption: {
+  statusBadge: {
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.surface.border,
-    backgroundColor: theme.colors.surface.light,
   },
-  selectedGenderOption: {
-    backgroundColor: theme.colors.secondary.main,
-    borderColor: theme.colors.secondary.main,
+  statusActive: {
+    backgroundColor: '#E8F5E8',
   },
-  genderOptionText: {
+  statusInactive: {
+    backgroundColor: '#FFE8E8',
+  },
+  statusText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Medium',
-    color: theme.colors.text.secondary,
+    fontFamily: 'Outfit-SemiBold',
   },
-  selectedGenderOptionText: {
-    color: theme.colors.text.white,
+  statusTextActive: {
+    color: '#5CB85C',
+  },
+  statusTextInactive: {
+    color: '#FF4444',
   },
 
   // Action Buttons
@@ -433,6 +553,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.lg,
     borderRadius: theme.borderRadius.lg,
     alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: theme.typography.fontSize.base,
