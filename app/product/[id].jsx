@@ -1,4 +1,3 @@
-import ProductCard from "@/components/ProductCard";
 import SafeAreaWrapper from "@/components/SafeAreaWrapper";
 import { useCart } from "@/providers/CartProvider";
 import { getProductById } from "@/services/apiService";
@@ -83,7 +82,7 @@ export default function ProductDetail() {
   };
 
   const handleViewCart = () => {
-    router.push("/(tabs)/cart");
+    router.push("/cart");
   };
 
   const handleIncrement = () => {

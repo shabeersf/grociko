@@ -1,5 +1,7 @@
+import STRIPE_CONFIG from '@/config/stripe.config';
 import { CartProvider } from "@/providers/CartProvider";
 import { UserProvider } from "@/providers/UserProvider";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -24,14 +26,20 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <UserProvider>
-        <CartProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            {/* <Stack.Screen name="+not-found" /> */}
-          </Stack>
-        </CartProvider>
-      </UserProvider>
+      <StripeProvider
+        publishableKey={STRIPE_CONFIG.PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.com.grociko" // Optional: for Apple Pay
+        urlScheme="grociko" // Required for 3D Secure and other redirects
+      >
+        <UserProvider>
+          <CartProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              {/* <Stack.Screen name="+not-found" /> */}
+            </Stack>
+          </CartProvider>
+        </UserProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

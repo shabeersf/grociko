@@ -1,8 +1,11 @@
 import SafeAreaWrapper from '@/components/SafeAreaWrapper';
+import { getCategories } from '@/services/apiService';
 import theme from '@/utils/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -15,97 +18,80 @@ import {
 const { width: screenWidth } = Dimensions.get('window');
 
 const Categories = () => {
-  const categories = [
-    {
-      id: 1,
-      name: 'Fresh Fruits\n& Vegetables',
-      backgroundColor: theme.colors.category.fruits.background,
-      borderColor: theme.colors.category.fruits.border,
-      image: require('../../assets/images/category/vegetables.png'),
-      cat_id: 'fruits_vegetables',
-    },
-    {
-      id: 2,
-      name: 'Cooking Oil\n& Ghee',
-      backgroundColor: theme.colors.category.oil.background,
-      borderColor: theme.colors.category.oil.border,
-      image: require('../../assets/images/category/staples.png'),
-      cat_id: 'cooking_oil_ghee',
-    },
-    {
-      id: 3,
-      name: 'Meat & Fish',
-      backgroundColor: theme.colors.category.meat.background,
-      borderColor: theme.colors.category.meat.border,
-      image: require('../../assets/images/category/fish_and_meat.png'),
-      cat_id: 'meat_fish',
-    },
-    {
-      id: 4,
-      name: 'Bakery & Snacks',
-      backgroundColor: theme.colors.category.bakery.background,
-      borderColor: theme.colors.category.bakery.border,
-      image: require('../../assets/images/category/snacks.png'),
-      cat_id: 'bakery_snacks',
-    },
-    {
-      id: 5,
-      name: 'Dairy & Eggs',
-      backgroundColor: theme.colors.category.dairy.background,
-      borderColor: theme.colors.category.dairy.border,
-      image: require('../../assets/images/category/diary-bakery.png'),
-      cat_id: 'dairy_eggs',
-    },
-    {
-      id: 6,
-      name: 'Beverages',
-      backgroundColor: theme.colors.category.beverages.background,
-      borderColor: theme.colors.category.beverages.border,
-      image: require('../../assets/images/category/snacks.png'),
-      cat_id: 'beverages',
-    },
-    {
-      id: 7,
-      name: 'Personal Care',
-      backgroundColor: '#FFF8E1',
-      borderColor: '#FFD54F',
-      image: require('../../assets/images/category/personal-care.png'),
-      cat_id: 'personal_care',
-    },
-    {
-      id: 8,
-      name: 'Baby Care',
-      backgroundColor: '#F0E8FF',
-      borderColor: '#9C6ADE',
-      image: require('../../assets/images/category/baby-care.png'),
-      cat_id: 'baby_care',
-    },
-  ];
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Responsive dimensions - Always 3 columns
+  // 🟩 Category Color Mapping (same as in Home)
+  const categoryColorMap = {
+    fruits: { bg: theme.colors.category.fruits.background, border: theme.colors.category.fruits.border },
+    vegetable: { bg: theme.colors.category.fruits.background, border: theme.colors.category.fruits.border },
+    oil: { bg: theme.colors.category.oil.background, border: theme.colors.category.oil.border },
+    meat: { bg: theme.colors.category.meat.background, border: theme.colors.category.meat.border },
+    fish: { bg: theme.colors.category.meat.background, border: theme.colors.category.meat.border },
+    bakery: { bg: theme.colors.category.bakery.background, border: theme.colors.category.bakery.border },
+    snacks: { bg: theme.colors.category.bakery.background, border: theme.colors.category.bakery.border },
+    dairy: { bg: theme.colors.category.dairy.background, border: theme.colors.category.dairy.border },
+    eggs: { bg: theme.colors.category.dairy.background, border: theme.colors.category.dairy.border },
+    beverages: { bg: theme.colors.category.beverages.background, border: theme.colors.category.beverages.border },
+  };
+
+  const getCategoryColors = (name) => {
+    const lower = name?.toLowerCase() || '';
+    for (const [key, colors] of Object.entries(categoryColorMap)) {
+      if (lower.includes(key)) return colors;
+    }
+    return { bg: '#FFF8E1', border: '#FFD54F' };
+  };
+
+  // 🟦 Fetch dynamic categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoading(true);
+        const res = await getCategories('active');
+        if (res.success && res.data.length > 0) {
+          const mapped = res.data.map((cat) => {
+            const colors = getCategoryColors(cat.category);
+            return {
+              id: cat.id,
+              name: cat.category,
+              backgroundColor: colors.bg,
+              borderColor: colors.border,
+              image: cat.image ? { uri: cat.image } : require('../../assets/images/category/vegetables.png'),
+              cat_id: cat.id,
+            };
+          });
+          setCategories(mapped);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // 🟨 Responsive grid (always 3 columns)
   const getCardDimensions = () => {
-    const padding = theme.spacing.lg * 2; // Left and right padding
-    const numColumns = 3; // Always 3 columns
-    const totalGaps = theme.spacing.md * (numColumns - 1); // Gaps between cards
+    const padding = theme.spacing.lg * 2;
+    const numColumns = 3;
+    const totalGaps = theme.spacing.md * (numColumns - 1);
     const availableWidth = screenWidth - padding - totalGaps;
     const cardWidth = availableWidth / numColumns;
-    
-    // Adaptive height based on card width to maintain proportions
-    const cardHeight = Math.max(cardWidth * 1.2, 140); // Minimum height of 140
-    
-    return {
-      numColumns,
-      cardWidth: Math.floor(cardWidth),
-      cardHeight: Math.floor(cardHeight),
-    };
+    const cardHeight = Math.max(cardWidth * 1.2, 140);
+    return { numColumns, cardWidth: Math.floor(cardWidth), cardHeight: Math.floor(cardHeight) };
   };
 
   const { numColumns, cardWidth, cardHeight } = getCardDimensions();
 
+  // 🟧 Handlers
   const handleCategoryPress = (item) => {
     router.push(`/search?cat_id=${item.cat_id}`);
   };
 
+  // 🟥 Render each category
   const renderCategory = ({ item }) => (
     <TouchableOpacity
       style={[
@@ -120,22 +106,16 @@ const Categories = () => {
       onPress={() => handleCategoryPress(item)}
       activeOpacity={0.7}
     >
-      {/* Product Image */}
       <View style={styles.imageContainer}>
-        <Image
-          source={item.image}
-          style={styles.categoryImage}
-          resizeMode="contain"
-        />
+        <Image source={item.image} style={styles.categoryImage} resizeMode="contain" />
       </View>
-
-      {/* Category Name */}
       <Text style={styles.categoryName} numberOfLines={2}>
         {item.name}
       </Text>
     </TouchableOpacity>
   );
 
+  // 🧭 Render main screen
   return (
     <SafeAreaWrapper>
       <View style={styles.container}>
@@ -145,11 +125,7 @@ const Categories = () => {
         </View>
 
         {/* Search Bar */}
-        <TouchableOpacity
-          style={styles.searchBar}
-          onPress={() => router.push('/search')}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/search')} activeOpacity={0.8}>
           <Ionicons
             name="search-outline"
             size={20}
@@ -159,17 +135,24 @@ const Categories = () => {
           <Text style={styles.searchPlaceholder}>Search Store</Text>
         </TouchableOpacity>
 
-        {/* Categories Grid */}
-        <FlatList
-          data={categories}
-          renderItem={renderCategory}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={numColumns}
-          key={`${numColumns}-${screenWidth}`} // Force re-render when screen changes
-          contentContainerStyle={styles.categoriesContainer}
-          columnWrapperStyle={styles.categoryRow}
-          showsVerticalScrollIndicator={false}
-        />
+        {/* Category List */}
+        {loading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary.main} />
+            <Text style={styles.loaderText}>Loading categories...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={categories}
+            renderItem={renderCategory}
+            keyExtractor={(item) => item.id.toString()}
+            numColumns={numColumns}
+            key={`${numColumns}-${screenWidth}`}
+            contentContainerStyle={styles.categoriesContainer}
+            columnWrapperStyle={styles.categoryRow}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
     </SafeAreaWrapper>
   );
@@ -182,7 +165,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
 
-  // Header Styles
   headerSection: {
     alignItems: 'center',
     paddingVertical: theme.spacing['2xl'],
@@ -191,10 +173,8 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize['3xl'],
     fontFamily: 'Outfit-SemiBold',
     color: theme.colors.text.primary,
-    textAlign: 'center',
   },
 
-  // Search Bar Styles
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,7 +196,17 @@ const styles = StyleSheet.create({
     color: theme.colors.text.placeholder,
   },
 
-  // Categories Styles
+  loaderContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  loaderText: {
+    marginTop: theme.spacing.md,
+    color: theme.colors.text.secondary,
+    fontFamily: 'Outfit-Medium',
+  },
+
   categoriesContainer: {
     paddingBottom: theme.spacing['6xl'],
   },
@@ -232,8 +222,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: theme.spacing.md,
   },
-
-  // Image Styles
   imageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -248,8 +236,6 @@ const styles = StyleSheet.create({
     maxWidth: 70,
     maxHeight: 70,
   },
-
-  // Text Styles
   categoryName: {
     fontSize: theme.typography.fontSize.xs,
     fontFamily: 'Outfit-Medium',

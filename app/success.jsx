@@ -99,7 +99,7 @@ const Success = () => {
   };
 
   const handleBackToHome = () => {
-    router.replace('/(tabs)/home');
+    router.replace('/home');
   };
 
   return (

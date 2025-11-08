@@ -108,7 +108,7 @@ const Home = () => {
 
       // Map brands data
       if (brandsRes.data && brandsRes.data.length > 0) {
-                  console.log(`brandsRes:`,brandsRes.data)
+                  // console.log(`brandsRes:`,brandsRes.data)
 
         const mappedBrands = brandsRes.data.map((brand) => ({
           id: brand.id,
@@ -172,29 +172,29 @@ const Home = () => {
 
   const handleCategoryPress = (item) => {
     // Navigate to search page with category ID
-    router.push(`/(tabs)/search?cat_id=${item.cat_id}`);
+    router.push(`/search?cat_id=${item.cat_id}`);
   };
 
   const handleSeeAll = (section) => {
     switch(section) {
       case "categories":
-        router.push("/(tabs)/categories");
+        router.push("/categories");
         break;
       case "exclusive":
       case "best-selling":
       case "meat":
       case "brands":
-        router.push("/(tabs)/search");
+        router.push("/search");
         break;
       default:
-        router.push("/(tabs)/search");
+        router.push("/search");
         break;
     }
   };
 
   const handleBrandPress = (brand) => {
     // Navigate to search page with brand filter
-    router.push(`/(tabs)/search?brand=${brand.name.toLowerCase()}`);
+    router.push(`/search?brand_id=${brand.id}`);
   };
 
   const renderProductCard = ({ item }) => (
@@ -283,7 +283,7 @@ const Home = () => {
 
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/search')}>
+          <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/search')}>
             <Ionicons
               name="search"
               size={20}

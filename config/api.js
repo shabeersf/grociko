@@ -3,8 +3,8 @@ export const API_CONFIG = {
   // Base URLs
   BASE_URL: "https://work.phpwebsites.in/grociko/api",
   BASE_IMG_URL: "https://work.phpwebsites.in/grociko/photos",
-  // BASE_URL: "https://work.phpwebsites.in/grociko/api",
-  // BASE_IMG_URL: "https://work.phpwebsites.in/grociko/photos",
+  // BASE_URL: "http://192.168.1.3/Zen/grociko/api",
+  // BASE_IMG_URL: "http://192.168.1.3/Zen/grociko/photos",
 
   // API Endpoints
   ENDPOINTS: {

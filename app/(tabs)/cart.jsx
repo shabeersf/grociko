@@ -120,7 +120,7 @@ const Cart = () => {
             </Text>
             <TouchableOpacity
               style={styles.shopButton}
-              onPress={() => router.push("/(tabs)/home")}
+              onPress={() => router.push("/home")}
             >
               <Text style={styles.shopButtonText}>Start Shopping</Text>
             </TouchableOpacity>

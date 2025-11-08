@@ -1,5 +1,5 @@
+import { clearUserData, getJwtToken, getUserData, saveUserData, updateUserProfile as updateUserProfileAPI } from '@/services/apiService';
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { getUserData, getJwtToken, clearUserData, saveUserData } from '@/services/apiService';
 
 // User Context
 const UserContext = createContext();
@@ -127,24 +127,31 @@ export const UserProvider = ({ children }) => {
     }
   };
 
-  // Update user profile
-  const updateUserProfile = async (updatedData) => {
+  // Update user profile - Now calls the API
+  const updateUserProfile = async (updatedData, imageFile = null) => {
     try {
-      const updatedUser = {
-        ...state.user,
-        ...updatedData,
-      };
+      if (!state.user?.id) {
+        return { success: false, error: 'User not authenticated' };
+      }
 
-      // Save updated user data
-      await saveUserData(updatedUser, state.jwt);
+      dispatch({ type: USER_ACTIONS.SET_LOADING, payload: true });
 
-      // Update context state
-      dispatch({
-        type: USER_ACTIONS.UPDATE_USER,
-        payload: updatedData,
-      });
+      // Call the API to update user profile
+      const result = await updateUserProfileAPI(state.user.id, updatedData, imageFile);
 
-      return { success: true };
+      if (result.success) {
+        // Update context state with the returned data from API
+        dispatch({
+          type: USER_ACTIONS.UPDATE_USER,
+          payload: result.data,
+        });
+
+        dispatch({ type: USER_ACTIONS.SET_LOADING, payload: false });
+        return { success: true, message: result.message };
+      } else {
+        dispatch({ type: USER_ACTIONS.SET_ERROR, payload: result.error });
+        return { success: false, error: result.error };
+      }
     } catch (error) {
       console.error('Error updating user profile:', error);
       dispatch({ type: USER_ACTIONS.SET_ERROR, payload: 'Failed to update profile' });
@@ -166,10 +173,12 @@ export const UserProvider = ({ children }) => {
 
   // Utility Functions
   const getUserImage = () => {
-    if (!state.user || !state.user.photo) {
+    if (!state.user || !state.user.image_url) {
       return null;
     }
-    return state.user.photo;
+    // console.log("User Image URL:", state.user.image_url);
+    // Return the full image_url if available, otherwise construct it
+    return state.user.image_url ;
   };
 
   const getUserName = () => {
@@ -231,3 +240,4 @@ export const useUser = () => {
 
 // Export action types for testing or advanced usage
 export { USER_ACTIONS };
+

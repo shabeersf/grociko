@@ -539,6 +539,7 @@ export const getProducts = async (filters = {}) => {
     if (filters.sub_id) queryParams.append("sub_id", filters.sub_id);
     if (filters.status) queryParams.append("status", filters.status);
     if (filters.featured) queryParams.append("featured", filters.featured);
+    if (filters.brand_id) queryParams.append("brand_id", filters.brand_id);
 
     const queryString = queryParams.toString();
     const url = queryString
@@ -556,6 +557,12 @@ export const getProducts = async (filters = {}) => {
       return {
         success: true,
         data: response.data.data || [],
+      };
+    } else if (response.success && response.data?.response_code === 220) {
+      // No results found - return success with empty array
+      return {
+        success: true,
+        data: [],
       };
     } else {
       return {
@@ -676,47 +683,62 @@ export const getUserProfile = async (userId) => {
 /**
  * Update User Profile
  */
-export const updateUserProfile = async (userId, formData) => {
+export const updateUserProfile = async (userId, userData, imageFile = null) => {
   try {
-    const headers = {
-      Authorization: getBasicAuthHeader(),
-      Accept: "application/json",
-    };
-
     console.log("📤 Updating user profile:", userId);
+
+    // Create FormData with all fields
+    const formData = new FormData();
+    formData.append('id', userId);
+    formData.append('name', userData.name);
+    formData.append('username', userData.username || userData.name);
+    formData.append('email', userData.email);
+    formData.append('phone', userData.phone);
+
+    // Add image if provided
+    if (imageFile) {
+      const filename = imageFile.uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      formData.append('photo', {
+        uri: imageFile.uri,
+        name: filename,
+        type: type,
+      });
+    }
 
     const response = await makeRequest("/update-user.php", {
       method: "POST",
-      headers,
+      headers: {
+        Authorization: getBasicAuthHeader(),
+        Accept: "application/json",
+        // Don't set Content-Type - let React Native set it with boundary
+      },
       body: formData,
     });
 
-    console.log("📥 Update Profile Response:", {
-      success: response.success,
-      statusCode: response.statusCode,
-      hasData: !!response.data,
-    });
+    console.log("📥 Update Profile Response:", response);
 
-    if (response.success && response.data?.response_code === 200) {
-      // Update local user data
-      const updatedUser = response.data.data;
-      const jwt = await getJwtToken();
-      await saveUserData(updatedUser, jwt);
-
-      return {
-        success: true,
-        data: updatedUser,
-        message: "Profile updated successfully!",
-      };
-    } else {
+    if (!response.success || response.data?.response_code !== 200) {
       return {
         success: false,
-        error:
-          response.data?.message ||
-          response.error ||
-          "Failed to update profile",
+        error: response.data?.message || response.error || "Failed to update profile",
       };
     }
+    console.log("✅ Profile updated successfully", response.data);
+
+    const updatedUser = response.data.data;
+
+    // Update local user data
+    const jwt = await getJwtToken();
+    await saveUserData(updatedUser, jwt);
+
+    return {
+      success: true,
+      data: updatedUser,
+      message: "Profile updated successfully!",
+    };
   } catch (error) {
     console.error("❌ Update Profile Error:", error);
     return handleApiError(error, "/update-user.php");
@@ -934,6 +956,219 @@ export const deleteUserAddress = async (addressId, userId) => {
   }
 };
 /**
+ * Get Search Filters (Categories, Subcategories, Brands)
+ */
+export const getFilters = async () => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("🔍 Fetching search filters");
+
+    const response = await makeRequest("/get-filters.php", {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || {},
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch filters",
+        data: {},
+      };
+    }
+  } catch (error) {
+    console.error("❌ Filters Fetch Error:", error);
+    return { success: false, error: error.message, data: {} };
+  }
+};
+
+/**
+ * Get Delivery Charge based on address
+ */
+export const getDeliveryCharge = async (addressId) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("🚚 Fetching delivery charge for address:", addressId);
+
+    const response = await makeRequest(`/get-delivery-charge.php?address_id=${addressId}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch delivery charge",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ Delivery Charge Fetch Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+/**
+ * Get Offer/Promo Codes
+ */
+export const getOfferCodes = async (filters = {}) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    const queryParams = new URLSearchParams();
+    if (filters.id) queryParams.append("id", filters.id);
+    if (filters.offer_code) queryParams.append("offer_code", filters.offer_code);
+    if (filters.status) queryParams.append("status", filters.status);
+
+    const queryString = queryParams.toString();
+    const url = queryString
+      ? `/get-offer-code.php?${queryString}`
+      : "/get-offer-code.php?status=active";
+
+    console.log("🎟️ Fetching offer codes");
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else if (response.success && response.data?.response_code === 220) {
+      // No codes found
+      return {
+        success: true,
+        data: [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch offer codes",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Offer Codes Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Create Order (Checkout)
+ */
+export const createOrder = async (orderData) => {
+  try {
+    const formData = new FormData();
+    formData.append("user_id", String(orderData.user_id));
+    formData.append("address_id", String(orderData.address_id));
+    formData.append("tot_price", String(orderData.tot_price));
+    formData.append("discount_id", String(orderData.discount_id || 0));
+    formData.append("discount_price", String(orderData.discount_price || "0.00"));
+    formData.append("delv_charge", String(orderData.delv_charge));
+    formData.append("vat_amount", String(orderData.vat_amount));
+    formData.append("grand_total", String(orderData.grand_total));
+    formData.append("pay_method", String(orderData.pay_method));
+    formData.append("del_zone", String(orderData.del_zone || ""));
+    formData.append("del_mode", String(orderData.del_mode));
+    formData.append("comment", String(orderData.comment || ""));
+    formData.append("items", orderData.items); // Already JSON string from checkout
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("🛒 Creating order for user:", orderData.user_id);
+
+    const response = await makeRequest("/create-order.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to create order",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ Create Order Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+/**
+ * Get User Orders
+ */
+export const getUserOrders = async (userId, statusFilter = null) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    let url = `/get-orders.php?user_id=${userId}`;
+    if (statusFilter) {
+      url += `&status=${statusFilter}`;
+    }
+
+    console.log("📦 Fetching orders for user:", userId, statusFilter ? `(${statusFilter})` : '');
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to fetch orders",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Get Orders Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
  * Get About Us Page
  */
 export const getAboutUs = async () => {
@@ -971,7 +1206,359 @@ export const getAboutUs = async () => {
     console.error("❌ About Us Fetch Error:", error);
     return { success: false, error: error.message, data: null };
   }
+  
 };
-// Export storage keys for external use if needed
+
+/**
+ * Get Contact Us And FAQ Data
+ */
+export const getContactAndFaq = async () => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("📞 Fetching contact details and FAQs...");
+
+    const response = await makeRequest(`/get-contact-faq.php`, {
+      method: "GET",
+      headers,
+    });
+
+    console.log("📦 API Response:", response);
+
+    // Check if response is successful
+    if (response.success && response.data?.response_code === 200) {
+      const contactData = response.data.data?.contact || {};
+      const faqData = response.data.data?.faq || [];
+
+      return {
+        success: true,
+        contact: contactData,
+        faq: faqData,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch contact and FAQ data",
+        contact: {},
+        faq: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Contact & FAQ Fetch Error:", error);
+    return {
+      success: false,
+      error: error.message,
+      contact: {},
+      faq: [],
+    };
+  }
+};
+
+// Add these new functions to your existing apiService.js file
+
+/**
+ * Create Stripe Payment Intent
+ */
+export const createPaymentIntent = async (paymentData) => {
+  try {
+    const formData = new FormData();
+    formData.append("user_id", String(paymentData.user_id));
+    formData.append("amount", String(paymentData.amount));
+    formData.append("currency", String(paymentData.currency || "gbp"));
+    formData.append("description", String(paymentData.description || "Grociko Order Payment"));
+    
+    if (paymentData.metadata) {
+      formData.append("metadata", JSON.stringify(paymentData.metadata));
+    }
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("💳 Creating payment intent for amount:", paymentData.amount);
+
+    const response = await makeRequest("/create-payment-intent.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to create payment intent",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ Create Payment Intent Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+/**
+ * Confirm Payment and Create Order
+ */
+export const confirmPaymentAndCreateOrder = async (orderData) => {
+  try {
+    const formData = new FormData();
+    formData.append("payment_intent_id", String(orderData.payment_intent_id));
+    formData.append("user_id", String(orderData.user_id));
+    formData.append("address_id", String(orderData.address_id));
+    formData.append("tot_price", String(orderData.tot_price));
+    formData.append("discount_id", String(orderData.discount_id || 0));
+    formData.append("discount_price", String(orderData.discount_price || "0.00"));
+    formData.append("delv_charge", String(orderData.delv_charge));
+    formData.append("vat_amount", String(orderData.vat_amount));
+    formData.append("grand_total", String(orderData.grand_total));
+    formData.append("del_zone", String(orderData.del_zone || ""));
+    formData.append("del_mode", String(orderData.del_mode));
+    formData.append("comment", String(orderData.comment || ""));
+    formData.append("items", orderData.items); // Already JSON string
+
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("✅ Confirming payment and creating order:", orderData.payment_intent_id);
+
+    const response = await makeRequest("/confirm-payment-order.php", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to confirm payment",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ Confirm Payment Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+/**
+ * Get Transaction Details
+ */
+export const getTransactionDetails = async (orderId) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    console.log("🔍 Fetching transaction details for order:", orderId);
+
+    const response = await makeRequest(`/get-transaction.php?order_id=${orderId}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.error || "Failed to fetch transaction details",
+        data: null,
+      };
+    }
+  } catch (error) {
+    console.error("❌ Transaction Details Fetch Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+// Add this function to your existing apiService.js
+
+/**
+ * Lookup addresses by UK postcode using Ideal Postcodes API
+ */
+export const lookupPostcode = async (postcode) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    // Remove spaces and convert to uppercase
+    const cleanPostcode = postcode.replace(/\s/g, '').toUpperCase();
+
+    console.log("🔍 Looking up postcode:", cleanPostcode);
+
+    const response = await makeRequest(`/postcode-lookup.php?postcode=${encodeURIComponent(cleanPostcode)}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+        message: response.data.message,
+      };
+    } else if (response.success && response.data?.response_code === 404) {
+      // Postcode not found
+      return {
+        success: false,
+        error: response.data.message || "Postcode not found",
+        data: [],
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to lookup postcode",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Postcode Lookup Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+// Add this function to your existing apiService.js
+
+/**
+ * Get Active Offer Codes
+ * @param {Object} filters - Optional filters { id, offer_code, status }
+ */
+export const getOfferCodes2 = async (filters = {}) => {
+  try {
+    const headers = {
+      Authorization: getBasicAuthHeader(),
+      Accept: "application/json",
+    };
+
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    
+    if (filters.id) {
+      queryParams.append("id", filters.id);
+    }
+    
+    if (filters.offer_code) {
+      queryParams.append("offer_code", filters.offer_code);
+    }
+    
+    if (filters.status) {
+      queryParams.append("status", filters.status);
+    } else {
+      // Default to active only
+      queryParams.append("status", "active");
+    }
+
+    const queryString = queryParams.toString();
+    const url = queryString
+      ? `/get-offer-codes.php?${queryString}`
+      : "/get-offer-codes.php?status=active";
+
+    console.log("🎟️ Fetching offer codes:", filters);
+
+    const response = await makeRequest(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (response.success && response.data?.response_code === 200) {
+      return {
+        success: true,
+        data: response.data.data || [],
+        message: response.data.message,
+      };
+    } else if (response.success && response.data?.response_code === 220) {
+      // No offer codes found
+      return {
+        success: true,
+        data: [],
+        message: response.data.message,
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.error || "Failed to fetch offer codes",
+        data: [],
+      };
+    }
+  } catch (error) {
+    console.error("❌ Offer Codes Fetch Error:", error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+/**
+ * Validate Offer Code
+ * Checks if code exists, is active, not expired, and meets minimum order
+ */
+export const validateOfferCode = async (offerCode, orderTotal) => {
+  try {
+    const response = await getOfferCodes2({ 
+      offer_code: offerCode,
+      status: 'active'
+    });
+
+    if (!response.success || response.data.length === 0) {
+      return {
+        success: false,
+        error: "Invalid or expired promo code",
+        data: null,
+      };
+    }
+
+    const offer = response.data[0];
+
+    // Check if expired
+    if (offer.is_expired) {
+      return {
+        success: false,
+        error: "This promo code has expired",
+        data: null,
+      };
+    }
+
+    // Check minimum order
+    if (orderTotal < offer.minimum_order) {
+      return {
+        success: false,
+        error: `Minimum order of £${offer.minimum_order.toFixed(2)} required for this promo code`,
+        data: null,
+      };
+    }
+
+    return {
+      success: true,
+      data: offer,
+      message: "Promo code is valid",
+    };
+  } catch (error) {
+    console.error("❌ Validate Offer Code Error:", error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+
 export { STORAGE_KEYS };
 

@@ -28,10 +28,9 @@ const MyDetails = () => {
   
   const [formData, setFormData] = useState({
     name: '',
-    username: '',
     email: '',
     phone: '',
-    photo: null,
+    image_url: null,
   });
 
   const [originalData, setOriginalData] = useState(formData);
@@ -47,7 +46,7 @@ const MyDetails = () => {
     try {
       setLoading(true);
       const user = await getUserData();
-      
+      // console.log('Fetched user data:', user);
       if (!user) {
         router.replace('/signin');
         return;
@@ -58,10 +57,9 @@ const MyDetails = () => {
       // Set form data from user data
       const data = {
         name: user.name || '',
-        username: user.username || '',
         email: user.email || '',
         phone: user.phone || '',
-        photo: user.photo || null,
+        image_url: user.image_url || null,
       };
       
       setFormData(data);
@@ -109,29 +107,16 @@ const MyDetails = () => {
     try {
       setSaving(true);
 
-      // Create FormData for API request
-      const updateFormData = new FormData();
-      updateFormData.append('id', userData.id);
-      updateFormData.append('name', formData.name);
-      updateFormData.append('username', formData.username || formData.name);
-      updateFormData.append('email', formData.email);
-      updateFormData.append('phone', formData.phone);
-
-      // Add image if selected
-      if (selectedImage) {
-        const filename = selectedImage.uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-        updateFormData.append('photo', {
-          uri: selectedImage.uri,
-          name: filename,
-          type: type,
-        });
-      }
+      // Prepare data for update (text fields only)
+      const updateData = {
+        id: userData.id,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+      };
 
       // Call update API
-      const response = await updateUserProfile(userData.id, updateFormData);
+      const response = await updateUserProfile(userData.id, updateData, selectedImage);
 
       if (response.success) {
         Alert.alert('Success', 'Your details have been updated successfully', [
@@ -139,6 +124,7 @@ const MyDetails = () => {
             text: 'OK',
             onPress: () => {
               setIsEditing(false);
+              setSelectedImage(null);
               loadUserData(); // Reload user data
             },
           },
@@ -187,12 +173,16 @@ const MyDetails = () => {
   // Get profile image URI
   const getProfileImageUri = () => {
     if (selectedImage) {
-      return selectedImage.uri;
+      return {
+        uri: selectedImage.uri,
+      };
     }
-    if (formData.photo) {
-      return `https://work.phpwebsites.in/grociko/photos/large/${formData.photo}`;
+    if (formData.image_url) {
+      return {
+        uri: formData.image_url,
+      }
     }
-    return 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
+    return require("../assets/company/profile.png")
   };
 
   // Show loading indicator
@@ -249,7 +239,7 @@ const MyDetails = () => {
           <View style={styles.profileSection}>
             <View style={styles.profileImageContainer}>
               <Image
-                source={{ uri: getProfileImageUri() }}
+                source={ getProfileImageUri()}
                 style={styles.profileImage}
                 resizeMode="cover"
               />
@@ -284,20 +274,7 @@ const MyDetails = () => {
               />
             </View>
 
-            {/* Username */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <TextInput
-                style={[styles.textInput, !isEditing && styles.disabledInput]}
-                value={formData.username}
-                onChangeText={(text) => setFormData({ ...formData, username: text })}
-                placeholder="Enter your username"
-                placeholderTextColor={theme.colors.text.placeholder}
-                autoCapitalize="none"
-                editable={isEditing}
-                selectTextOnFocus={isEditing}
-              />
-            </View>
+            
 
             {/* Email */}
             <View style={styles.inputGroup}>
@@ -333,8 +310,6 @@ const MyDetails = () => {
                 selectTextOnFocus={isEditing}
               />
             </View>
-
-           
           </View>
 
           {/* Action Buttons */}
@@ -371,8 +346,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background.primary,
   },
-
-  // Loading Styles
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -385,8 +358,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
   },
-
-  // Header Styles
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -418,13 +389,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Content Styles
   content: {
     flex: 1,
   },
-
-  // Profile Section Styles
   profileSection: {
     alignItems: 'center',
     paddingVertical: theme.spacing['3xl'],
@@ -466,8 +433,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Regular',
     color: theme.colors.text.secondary,
   },
-
-  // Form Styles
   formContainer: {
     paddingHorizontal: theme.spacing.lg,
     gap: theme.spacing.lg,
@@ -498,34 +463,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface.light,
     color: theme.colors.text.secondary,
   },
-
-  // Status Styles
-  statusContainer: {
-    flexDirection: 'row',
-  },
-  statusBadge: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.lg,
-  },
-  statusActive: {
-    backgroundColor: '#E8F5E8',
-  },
-  statusInactive: {
-    backgroundColor: '#FFE8E8',
-  },
-  statusText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
-  },
-  statusTextActive: {
-    color: '#5CB85C',
-  },
-  statusTextInactive: {
-    color: '#FF4444',
-  },
-
-  // Action Buttons
   actionButtons: {
     flexDirection: 'row',
     gap: theme.spacing.lg,

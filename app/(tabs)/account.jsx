@@ -1,10 +1,11 @@
-import SafeAreaWrapper from '@/components/SafeAreaWrapper';
-import { useCart } from '@/providers/CartProvider';
-import { clearUserData, getUserData } from '@/services/apiService';
-import theme from '@/utils/theme';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import SafeAreaWrapper from "@/components/SafeAreaWrapper";
+import { useCart } from "@/providers/CartProvider";
+import { useUser } from "@/providers/UserProvider";
+import { clearUserData, getUserData } from "@/services/apiService";
+import theme from "@/utils/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,12 +15,13 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
 const Account = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const { clearCart } = useCart(); // Import cart context to clear on logout
+  const { user, isAuthenticated, getUserImage } = useUser();
 
   // Check authentication status when screen is focused
   useFocusEffect(
@@ -32,17 +34,17 @@ const Account = () => {
     try {
       setLoading(true);
       const user = await getUserData();
-      
+      // console.log("User data loaded:", user);
       if (!user) {
         // User not logged in, redirect to sign in
-        router.replace('/signin');
+        router.replace("/signin");
         return;
       }
-      
+
       setUserData(user);
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      router.replace('/signin');
+      console.error("Error checking auth status:", error);
+      router.replace("/signin");
     } finally {
       setLoading(false);
     }
@@ -50,34 +52,34 @@ const Account = () => {
 
   const handleLogout = () => {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of your account?',
+      "Sign Out",
+      "Are you sure you want to sign out of your account?",
       [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: "Cancel",
+          style: "cancel",
         },
         {
-          text: 'Sign Out',
-          style: 'destructive',
+          text: "Sign Out",
+          style: "destructive",
           onPress: async () => {
             try {
               // Clear user data from SecureStore
               await clearUserData();
-              
+
               // Clear cart data
               clearCart();
-              
+
               // Show success message
-              Alert.alert('Success', 'You have been signed out successfully.', [
+              Alert.alert("Success", "You have been signed out successfully.", [
                 {
-                  text: 'OK',
-                  onPress: () => router.replace('/signin'),
+                  text: "OK",
+                  onPress: () => router.replace("/signin"),
                 },
               ]);
             } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              console.error("Logout error:", error);
+              Alert.alert("Error", "Failed to sign out. Please try again.");
             }
           },
         },
@@ -88,45 +90,45 @@ const Account = () => {
   const menuItems = [
     {
       id: 1,
-      title: 'Orders',
-      icon: 'bag-outline',
-      onPress: () => router.push('/orders'),
+      title: "Orders",
+      icon: "bag-outline",
+      onPress: () => router.push("/orders"),
     },
     {
       id: 2,
-      title: 'My Details',
-      icon: 'person-outline',
-      onPress: () => router.push('/my-details'),
+      title: "My Details",
+      icon: "person-outline",
+      onPress: () => router.push("/my-details"),
     },
     {
       id: 3,
-      title: 'Delivery Address',
-      icon: 'location-outline',
-      onPress: () => router.push('/address-management'),
+      title: "Delivery Address",
+      icon: "location-outline",
+      onPress: () => router.push("/address-management"),
     },
     {
       id: 4,
-      title: 'Promo Code',
-      icon: 'ticket-outline',
-      onPress: () => router.push('/promo-code'),
+      title: "Promo Code",
+      icon: "ticket-outline",
+      onPress: () => router.push("/promo-code"),
     },
-    {
-      id: 5,
-      title: 'Notifications',
-      icon: 'notifications-outline',
-      onPress: () => router.push('/notifications'),
-    },
+    // {
+    //   id: 5,
+    //   title: 'Notifications',
+    //   icon: 'notifications-outline',
+    //   onPress: () => router.push('/notifications'),
+    // },
     {
       id: 6,
-      title: 'Help',
-      icon: 'help-circle-outline',
-      onPress: () => router.push('/help'),
+      title: "Help",
+      icon: "help-circle-outline",
+      onPress: () => router.push("/help"),
     },
     {
       id: 7,
-      title: 'About',
-      icon: 'information-circle-outline',
-      onPress: () => router.push('/about'),
+      title: "About",
+      icon: "information-circle-outline",
+      onPress: () => router.push("/about"),
     },
   ];
 
@@ -176,29 +178,29 @@ const Account = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Account</Text>
         </View>
-
+{/* {console.log("Rendering Account with userData:", getUserImage())} */}
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
             <Image
-              source={{
-                uri: userData.photo
-                  ? `https://work.phpwebsites.in/grociko/photos/large/${userData.photo}`
-                  : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-              }}
+              source={
+                isAuthenticated && getUserImage()
+                  ? { uri: getUserImage() }
+                  : require("../../assets/company/profile.png")
+              }
               style={styles.profileImage}
               resizeMode="cover"
             />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.userName}>{userData.name || 'User'}</Text>
+            <Text style={styles.userName}>{userData.name || "User"}</Text>
             <Text style={styles.userEmail}>
-              {userData.email || userData.phone || 'No email'}
+              {userData.email || userData.phone || "No email"}
             </Text>
           </View>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => router.push('/my-details')}
+            onPress={() => router.push("/my-details")}
           >
             <Ionicons
               name="pencil-outline"
@@ -209,9 +211,7 @@ const Account = () => {
         </View>
 
         {/* Menu Items */}
-        <View style={styles.menuSection}>
-          {menuItems.map(renderMenuItem)}
-        </View>
+        <View style={styles.menuSection}>{menuItems.map(renderMenuItem)}</View>
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -239,32 +239,32 @@ const styles = StyleSheet.create({
   // Loading Styles
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: theme.colors.background.primary,
   },
   loadingText: {
     marginTop: theme.spacing.lg,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
 
   // Header Styles
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: theme.spacing.xl,
   },
   headerTitle: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontFamily: 'Outfit-SemiBold',
+    fontSize: theme.typography.fontSize["3xl"],
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
   },
 
   // Profile Section Styles
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: theme.colors.surface.card,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
@@ -287,13 +287,13 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.xs,
   },
   userEmail: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
   editButton: {
@@ -301,8 +301,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surface.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // Menu Section Styles
@@ -312,25 +312,25 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.surface.divider,
   },
   menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   menuItemText: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.primary,
     marginLeft: theme.spacing.lg,
   },
@@ -339,19 +339,19 @@ const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: theme.colors.surface.card,
     borderRadius: theme.borderRadius.lg,
-    marginBottom: theme.spacing['6xl'],
+    marginBottom: theme.spacing["6xl"],
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
   },
   logoutContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.lg,
   },
   logoutText: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Medium',
+    fontFamily: "Outfit-Medium",
     color: theme.colors.status.error,
     marginLeft: theme.spacing.lg,
   },

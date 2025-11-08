@@ -250,7 +250,7 @@ const SignUp = () => {
           "success"
         );
         setTimeout(() => {
-          router.replace("/(tabs)/home");
+          router.replace("/home");
         }, 1500);
       } else {
         // Show errors

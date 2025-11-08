@@ -78,7 +78,7 @@ const Notifications = () => {
         router.push('/orders');
         break;
       case 'promotion':
-        router.push('/(tabs)/search');
+        router.push('/search');
         break;
       
       default:

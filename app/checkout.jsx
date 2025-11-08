@@ -1,85 +1,167 @@
-import SafeAreaWrapper from '@/components/SafeAreaWrapper';
-import { useCart } from '@/providers/CartProvider';
-import theme from '@/utils/theme';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import SafeAreaWrapper from "@/components/SafeAreaWrapper";
+import { useCart } from "@/providers/CartProvider";
 import {
+  confirmPaymentAndCreateOrder,
+  createOrder,
+  createPaymentIntent,
+  getDeliveryCharge,
+  getOfferCodes,
+  getUserAddresses,
+  getUserData,
+} from "@/services/apiService";
+
+import theme from "@/utils/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { useStripe } from "@stripe/stripe-react-native";
+import { Image } from "expo-image";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
   Alert,
-  Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
 const Checkout = () => {
   const { items, getCartSummary, clearCart } = useCart();
   const { formattedPrice, totalItems } = getCartSummary();
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('card');
-  const [promoCode, setPromoCode] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [placing, setPlacing] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cod");
+  const [promoCode, setPromoCode] = useState("");
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [showPromoSuggestions, setShowPromoSuggestions] = useState(false);
+  const [promoCodes, setPromoCodes] = useState([]);
+  const [deliveryFee, setDeliveryFee] = useState(2.99);
+  const [deliveryZone, setDeliveryZone] = useState("");
 
-  const deliveryFee = 2.99;
-  const vatRate = 0.20; // 20% VAT
-  const subtotal = parseFloat(formattedPrice.replace(/[£$,]/g, '')) || 0;
-  const promoDiscount = appliedPromo ? (subtotal * appliedPromo.discount) : 0;
+  // Stripe payment states
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const vatRate = 0.2; // 20% VAT
+  const subtotal = parseFloat(formattedPrice.replace(/[£$,]/g, "")) || 0;
+  const promoDiscount = appliedPromo
+    ? appliedPromo.offer_percentage
+      ? subtotal * (parseFloat(appliedPromo.offer_percentage) / 100)
+      : parseFloat(appliedPromo.offer_price || 0)
+    : 0;
   const discountedSubtotal = subtotal - promoDiscount;
   const vatAmount = discountedSubtotal * vatRate;
   const totalAmount = discountedSubtotal + deliveryFee + vatAmount;
 
-  // Available promo codes
-  const promoCodes = [
+  const paymentMethods = [
     {
-      code: 'WELCOME10',
-      discount: 0.10,
-      description: '10% off on first order',
-      minOrder: 15.00,
+      id: "card",
+      name: "Online Payment",
+      icon: "card-outline",
+      details: "Pay with Card, Apple Pay, Google Pay",
+      description: "Secure payment via Stripe",
     },
     {
-      code: 'SAVE20',
-      discount: 0.20,
-      description: '20% off on orders over £30',
-      minOrder: 30.00,
-    },
-    {
-      code: 'FRESH15',
-      discount: 0.15,
-      description: '15% off on fresh products',
-      minOrder: 20.00,
-    },
-    {
-      code: 'NEWUSER',
-      discount: 0.25,
-      description: '25% off for new customers',
-      minOrder: 25.00,
+      id: "cod",
+      name: "Click & Collect",
+      icon: "storefront-outline",
+      details: "Pay when you collect",
+      description: "Collect from store and pay in cash",
     },
   ];
+
+  // Load data on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      loadCheckoutData();
+    }, [])
+  );
+
+  const loadCheckoutData = async () => {
+    try {
+      setLoading(true);
+
+      // Get user data
+      const user = await getUserData();
+      if (!user) {
+        Alert.alert("Authentication Required", "Please sign in to continue", [
+          { text: "OK", onPress: () => router.replace("/signin") },
+        ]);
+        return;
+      }
+      setUserData(user);
+
+      // Get user addresses
+      const addressesResponse = await getUserAddresses(user.id);
+      if (addressesResponse.success && addressesResponse.data.length > 0) {
+        setAddresses(addressesResponse.data);
+
+        // Select default address or first address
+        const defaultAddr = addressesResponse.data.find(
+          (addr) => addr.is_default === "yes"
+        );
+        const selectedAddr = defaultAddr || addressesResponse.data[0];
+        setSelectedAddress(selectedAddr);
+
+        // Get delivery charge for selected address
+        await loadDeliveryCharge(selectedAddr.id);
+      } else {
+        // No addresses found, prompt to add one
+        Alert.alert(
+          "No Delivery Address",
+          "Please add a delivery address to continue",
+          [
+            { text: "Cancel", style: "cancel", onPress: () => router.back() },
+            {
+              text: "Add Address",
+              onPress: () => router.push("/address-management"),
+            },
+          ]
+        );
+      }
+
+      // Load available promo codes
+      const promoResponse = await getOfferCodes({ status: "active" });
+      if (promoResponse.success) {
+        setPromoCodes(promoResponse.data);
+      }
+    } catch (error) {
+      console.error("Error loading checkout data:", error);
+      Alert.alert("Error", "Failed to load checkout information");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDeliveryCharge = async (addressId) => {
+    try {
+      const response = await getDeliveryCharge(addressId);
+      if (response.success && response.data) {
+        const chargeData = response.data[0] || response.data;
+        setDeliveryFee(parseFloat(chargeData.delivery_charge) || 2.99);
+        setDeliveryZone(chargeData.delivery_zone || "");
+      }
+    } catch (error) {
+      console.error("Error loading delivery charge:", error);
+    }
+  };
 
   // Get suggested promo codes based on subtotal
   const getSuggestedPromos = () => {
-    return promoCodes.filter(promo => subtotal >= promo.minOrder && !appliedPromo);
+    return promoCodes.filter(
+      (promo) =>
+        subtotal >= parseFloat(promo.minimum_order || 0) &&
+        !appliedPromo &&
+        promo.status === "active"
+    );
   };
-
-  const paymentMethods = [
-    {
-      id: 'card',
-      name: 'Credit/Debit Card',
-      icon: 'card-outline',
-      details: 'Secure payment via card',
-      description: 'Pay securely with your credit or debit card',
-    },
-    {
-      id: 'cod',
-      name: 'Click & Collect',
-      icon: 'storefront-outline',
-      details: 'Pay when you collect',
-      description: 'Collect from store and pay in cash',
-    },
-  ];
 
   const handlePaymentMethodSelect = (method) => {
     setSelectedPaymentMethod(method.id);
@@ -87,28 +169,39 @@ const Checkout = () => {
 
   const handleApplyPromo = () => {
     const foundPromo = promoCodes.find(
-      p => p.code.toLowerCase() === promoCode.toLowerCase()
+      (p) => p.offer_code.toLowerCase() === promoCode.toLowerCase()
     );
 
     if (!foundPromo) {
-      Alert.alert('Invalid Code', 'Please enter a valid promo code.');
+      Alert.alert("Invalid Code", "Please enter a valid promo code.");
       return;
     }
 
-    if (subtotal < foundPromo.minOrder) {
+    if (foundPromo.status !== "active") {
+      Alert.alert("Expired Code", "This promo code has expired.");
+      return;
+    }
+
+    const minOrder = parseFloat(foundPromo.minimum_order || 0);
+    if (subtotal < minOrder) {
       Alert.alert(
-        'Minimum Order Not Met',
-        `This promo code requires a minimum order of £${foundPromo.minOrder.toFixed(2)}.`
+        "Minimum Order Not Met",
+        `This promo code requires a minimum order of £${minOrder.toFixed(2)}.`
       );
       return;
     }
 
     setAppliedPromo(foundPromo);
-    setPromoCode('');
+    setPromoCode("");
     setShowPromoSuggestions(false);
+
+    const discountAmount = foundPromo.offer_percentage
+      ? subtotal * (parseFloat(foundPromo.offer_percentage) / 100)
+      : parseFloat(foundPromo.offer_price || 0);
+
     Alert.alert(
-      'Promo Applied!',
-      `You saved £${(subtotal * foundPromo.discount).toFixed(2)} with ${foundPromo.code}!`
+      "Promo Applied!",
+      `You saved £${discountAmount.toFixed(2)} with ${foundPromo.offer_code}!`
     );
   };
 
@@ -117,130 +210,441 @@ const Checkout = () => {
   };
 
   const handlePromoSuggestion = (promo) => {
-    setPromoCode(promo.code);
+    setPromoCode(promo.offer_code);
     setShowPromoSuggestions(false);
   };
 
-  const handlePlaceOrder = () => {
-    // Clear cart and navigate to success page
-    clearCart();
-    router.push('/success');
+  const handleAddressChange = () => {
+    if (addresses.length > 1) {
+      setShowAddressModal(true);
+    } else {
+      router.push("/address-management");
+    }
   };
 
-  const renderCartItem = ({ item }) => (
-    <View style={styles.cartItem}>
-      <Image
-        source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-        style={styles.productImage}
-        resizeMode="cover"
-      />
-      <View style={styles.itemDetails}>
-        <Text style={styles.productName} numberOfLines={1}>
-          {item.name}
-        </Text>
-        <Text style={styles.productUnit}>{item.unit}</Text>
-        <View style={styles.quantityPrice}>
-          <Text style={styles.quantityText}>Qty: {item.quantity}</Text>
-          <Text style={styles.itemPrice}>
-            £{((item.sellingPrice || item.price || 0) * item.quantity).toFixed(2)}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+  const handleSelectAddress = async (address) => {
+    setSelectedAddress(address);
+    setShowAddressModal(false);
+    await loadDeliveryCharge(address.id);
+  };
 
-  const renderPaymentMethod = (method) => (
-    <TouchableOpacity
-      key={method.id}
-      style={[
-        styles.paymentMethod,
-        selectedPaymentMethod === method.id && styles.selectedPaymentMethod,
-        method.id === 'cod' && styles.codPaymentMethod
-      ]}
-      onPress={() => handlePaymentMethodSelect(method)}
-    >
-      <View style={styles.paymentMethodContent}>
-        <View style={[
-          styles.paymentMethodIcon,
-          method.id === 'cod' && styles.codIcon
-        ]}>
-          <Ionicons
-            name={method.icon}
-            size={24}
-            color={method.id === 'cod' ? theme.colors.status.success : theme.colors.text.primary}
-          />
+  // Handle Card Payment with Stripe Payment Sheet
+  const handleCardPayment = async () => {
+    try {
+      setProcessingPayment(true);
+      setPlacing(true);
+
+      // Step 1: Create Payment Intent
+      console.log("💳 Creating payment intent...");
+      const paymentIntentResponse = await createPaymentIntent({
+        user_id: userData.id,
+        amount: totalAmount,
+        currency: "gbp",
+        description: `Grociko Order - ${totalItems} items`,
+        metadata: {
+          order_items: totalItems,
+          subtotal: subtotal.toFixed(2),
+          delivery_fee: deliveryFee.toFixed(2),
+          vat_amount: vatAmount.toFixed(2),
+        },
+      });
+
+      if (!paymentIntentResponse.success) {
+        throw new Error(
+          paymentIntentResponse.error || "Failed to initialize payment"
+        );
+      }
+
+      console.log(
+        "✅ Payment intent created:",
+        paymentIntentResponse.data.payment_intent_id
+      );
+
+      // Step 2: Initialize Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: "Grociko",
+        paymentIntentClientSecret: paymentIntentResponse.data.client_secret,
+        defaultBillingDetails: {
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+        },
+        allowsDelayedPaymentMethods: false,
+        returnURL: "grociko://checkout",
+      });
+
+      if (initError) {
+        throw new Error(initError.message || "Failed to initialize payment");
+      }
+
+      console.log("✅ Payment sheet initialized");
+
+      // Step 3: Present Payment Sheet
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        // User cancelled or error occurred
+        if (presentError.code === "Canceled") {
+          console.log("User cancelled payment");
+          return;
+        }
+        throw new Error(presentError.message || "Payment failed");
+      }
+
+      console.log("✅ Payment completed successfully");
+
+      // Step 4: Create order with confirmed payment
+      console.log("📦 Creating order...");
+      const orderData = {
+        payment_intent_id: paymentIntentResponse.data.payment_intent_id,
+        user_id: userData.id,
+        address_id: selectedAddress.id,
+        tot_price: subtotal.toFixed(2),
+        discount_id: appliedPromo ? appliedPromo.id : 0,
+        discount_price: promoDiscount.toFixed(2),
+        delv_charge: deliveryFee.toFixed(2),
+        vat_amount: vatAmount.toFixed(2),
+        grand_total: totalAmount.toFixed(2),
+        del_zone: deliveryZone,
+        del_mode: "Home Delivery",
+        comment: "",
+        items: JSON.stringify(items),
+      };
+
+      const orderResponse = await confirmPaymentAndCreateOrder(orderData);
+
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.error || "Failed to create order");
+      }
+
+      console.log("✅ Order created:", orderResponse.data.order_number);
+
+      // Clear cart
+      clearCart();
+
+      // Show success message
+      Alert.alert(
+        "Payment Successful!",
+        `Your order #${orderResponse.data.order_number} has been placed successfully. A confirmation email has been sent to you.`,
+        [
+          {
+            text: "View Orders",
+            onPress: () => router.replace("/orders"),
+          },
+          {
+            text: "Continue Shopping",
+            onPress: () => router.replace("/home"),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("❌ Payment Error:", error);
+      Alert.alert(
+        "Payment Failed",
+        error.message || "Unable to process payment. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setProcessingPayment(false);
+      setPlacing(false);
+    }
+  };
+
+  // Handle Click & Collect Order
+  const handleClickAndCollectOrder = async () => {
+    try {
+      setPlacing(true);
+
+      // Prepare order data
+      const orderData = {
+        user_id: userData.id,
+        address_id: selectedAddress.id,
+        tot_price: subtotal.toFixed(2),
+        discount_id: appliedPromo ? appliedPromo.id : 0,
+        discount_price: promoDiscount.toFixed(2),
+        delv_charge: deliveryFee.toFixed(2),
+        vat_amount: vatAmount.toFixed(2),
+        grand_total: totalAmount.toFixed(2),
+        pay_method: "click_and_collect",
+        del_zone: deliveryZone,
+        del_mode: "Collect from Store",
+        comment: "",
+        items: JSON.stringify(items),
+      };
+
+      console.log("📤 Placing order:", orderData);
+
+      // Create order
+      const response = await createOrder(orderData);
+
+      if (response.success) {
+        // Clear cart
+        clearCart();
+
+        // Show success message
+        Alert.alert(
+          "Order Placed Successfully!",
+          `Your order #${response.data.order_number} has been confirmed. You will receive a confirmation email shortly.`,
+          [
+            {
+              text: "View Orders",
+              onPress: () => router.replace("/orders"),
+            },
+            {
+              text: "Continue Shopping",
+              onPress: () => router.replace("/home"),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Order Failed",
+          response.error || "Unable to place order. Please try again."
+        );
+      }
+    } catch (error) {
+      console.error("Error placing order:", error);
+      Alert.alert("Error", "Failed to place order. Please try again.");
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  // Main place order handler
+  const handlePlaceOrder = async () => {
+    // Validations
+    if (!userData) {
+      Alert.alert("Error", "User data not found. Please try again.");
+      return;
+    }
+
+    if (!selectedAddress) {
+      Alert.alert("Error", "Please select a delivery address");
+      return;
+    }
+
+    if (items.length === 0) {
+      Alert.alert("Error", "Your cart is empty");
+      return;
+    }
+
+    // Route to appropriate payment handler
+    if (selectedPaymentMethod === "card") {
+      await handleCardPayment();
+    } else {
+      await handleClickAndCollectOrder();
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaWrapper>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary.main} />
+          <Text style={styles.loadingText}>Loading checkout...</Text>
         </View>
-        <View style={styles.paymentMethodInfo}>
-          <Text style={styles.paymentMethodName}>{method.name}</Text>
-          <Text style={styles.paymentMethodDetails}>{method.details}</Text>
-          {method.description && (
-            <Text style={styles.paymentMethodDescription}>{method.description}</Text>
-          )}
-        </View>
-      </View>
-      <View style={[
-        styles.radioButton,
-        selectedPaymentMethod === method.id && styles.selectedRadioButton
-      ]}>
-        {selectedPaymentMethod === method.id && (
-          <View style={styles.radioButtonInner} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+      </SafeAreaWrapper>
+    );
+  }
+
+  const suggestedPromos = getSuggestedPromos();
 
   return (
     <SafeAreaWrapper>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={theme.colors.text.primary} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color={theme.colors.text.primary}
+            />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Checkout</Text>
-          <View style={styles.placeholder} />
+          <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Delivery Address */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Delivery Address Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delivery Address</Text>
-            <View style={styles.addressCard}>
-              <View style={styles.addressHeader}>
-                <Ionicons name="location" size={20} color={theme.colors.secondary.main} />
-                <Text style={styles.addressType}>Home</Text>
-              </View>
-              <Text style={styles.addressText}>
-                123 Main Street, Apartment 4B{'\n'}
-                Dhaka, Bangladesh 1207
-              </Text>
-              <TouchableOpacity style={styles.changeButton}>
-                <Text style={styles.changeButtonText}>Change</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+              <TouchableOpacity onPress={handleAddressChange}>
+                <Text style={styles.changeText}>Change</Text>
               </TouchableOpacity>
             </View>
+
+            {selectedAddress && (
+              <View style={styles.addressCard}>
+                <View style={styles.addressIconContainer}>
+                  <Ionicons
+                    name="location"
+                    size={20}
+                    color={theme.colors.primary.main}
+                  />
+                </View>
+                <View style={styles.addressInfo}>
+                   <Text style={styles.addressType}>
+                    {selectedAddress.address1}
+                  </Text>
+                  <Text style={styles.addressText}>
+                    {selectedAddress.address2}
+                    {selectedAddress.address3
+                      ? `, ${selectedAddress.address3}`
+                      : ""}
+                  </Text>
+                  <Text style={styles.addressCity}>
+                    {selectedAddress.city}, {selectedAddress.pincode}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
-          {/* Order Items */}
+          {/* Order Items Summary */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Order Items ({totalItems})</Text>
-            {items.map((item, index) => (
-              <View key={item.id}>
-                {renderCartItem({ item })}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Order Items</Text>
+              <Text style={styles.itemCount}>{totalItems} items</Text>
+            </View>
+
+            {items.slice(0, 3).map((item, index) => (
+              <View key={item.id} style={styles.orderItem}>
+                <Image
+                  source={{ uri: item.image.uri }}
+                  style={styles.orderItemImage}
+                  contentFit="cover"
+                />
+                <View style={styles.orderItemInfo}>
+                  <Text style={styles.orderItemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.orderItemDetails}>
+                    {item.quantity} x £{item.sellingPrice.toFixed(2)}
+                  </Text>
+                </View>
+                <Text style={styles.orderItemTotal}>
+                  £{(item.quantity * item.sellingPrice).toFixed(2)}
+                </Text>
               </View>
+            ))}
+
+            {items.length > 3 && (
+              <Text style={styles.moreItems}>
+                +{items.length - 3} more item{items.length - 3 !== 1 ? "s" : ""}
+              </Text>
+            )}
+          </View>
+
+          {/* Payment Method Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Payment Method</Text>
+
+            {paymentMethods.map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.paymentMethod,
+                  selectedPaymentMethod === method.id &&
+                    styles.selectedPaymentMethod,
+                ]}
+                onPress={() => handlePaymentMethodSelect(method)}
+              >
+                <View style={styles.paymentMethodContent}>
+                  <View
+                    style={[
+                      styles.radioButton,
+                      selectedPaymentMethod === method.id &&
+                        styles.radioButtonSelected,
+                    ]}
+                  >
+                    {selectedPaymentMethod === method.id && (
+                      <View style={styles.radioButtonInner} />
+                    )}
+                  </View>
+                  <View style={styles.paymentIconContainer}>
+                    <Ionicons
+                      name={method.icon}
+                      size={24}
+                      color={
+                        selectedPaymentMethod === method.id
+                          ? theme.colors.primary.main
+                          : theme.colors.text.secondary
+                      }
+                    />
+                  </View>
+                  <View style={styles.paymentMethodInfo}>
+                    <Text style={styles.paymentMethodName}>{method.name}</Text>
+                    <Text style={styles.paymentMethodDetails}>
+                      {method.details}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
 
-          {/* Payment Method */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Payment Method</Text>
-            {paymentMethods.map(renderPaymentMethod)}
-          </View>
+          {/* Payment Info Note - Only show when online payment is selected */}
+          {selectedPaymentMethod === "card" && (
+            <View style={styles.section}>
+              <View style={styles.paymentInfoCard}>
+                <View style={styles.paymentInfoHeader}>
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={24}
+                    color={theme.colors.status.success}
+                  />
+                  <Text style={styles.paymentInfoTitle}>Secure Payment</Text>
+                </View>
+                <Text style={styles.paymentInfoText}>
+                  Complete your payment securely with Stripe. Accepts all major
+                  credit cards, Apple Pay, and Google Pay.
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Promo Code Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Promo Code</Text>
-            {!appliedPromo ? (
+            {appliedPromo ? (
+              <View style={styles.appliedPromoContainer}>
+                <View style={styles.appliedPromoContent}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={24}
+                    color={theme.colors.status.success}
+                  />
+                  <View style={styles.appliedPromoInfo}>
+                    <Text style={styles.appliedPromoCode}>
+                      {appliedPromo.offer_code}
+                    </Text>
+                    <Text style={styles.appliedPromoDesc}>
+                      You saved £{promoDiscount.toFixed(2)}!
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={handleRemovePromo}
+                  style={styles.removePromoButton}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={24}
+                    color={theme.colors.text.secondary}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
               <View style={styles.promoContainer}>
+                <Text style={styles.sectionTitle}>Have a Promo Code?</Text>
                 <View style={styles.promoInputContainer}>
                   <TextInput
                     style={styles.promoInput}
@@ -249,52 +653,81 @@ const Checkout = () => {
                     value={promoCode}
                     onChangeText={setPromoCode}
                     autoCapitalize="characters"
-                    onFocus={() => setShowPromoSuggestions(true)}
                   />
                   <TouchableOpacity
                     style={[
                       styles.applyButton,
-                      !promoCode.trim() && styles.applyButtonDisabled
+                      !promoCode && styles.applyButtonDisabled,
                     ]}
                     onPress={handleApplyPromo}
-                    disabled={!promoCode.trim()}
+                    disabled={!promoCode}
                   >
                     <Text style={styles.applyButtonText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Promo Suggestions */}
-                {showPromoSuggestions && getSuggestedPromos().length > 0 && (
+                {/* Suggested Promo Codes */}
+                {suggestedPromos.length > 0 && !showPromoSuggestions && (
+                  <TouchableOpacity
+                    onPress={() => setShowPromoSuggestions(true)}
+                    style={styles.viewPromosButton}
+                  >
+                    <Text style={styles.viewPromosText}>
+                      View {suggestedPromos.length} available promo
+                      {suggestedPromos.length !== 1 ? "s" : ""}
+                    </Text>
+                    <Ionicons
+                      name="chevron-down"
+                      size={16}
+                      color={theme.colors.primary.main}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {showPromoSuggestions && suggestedPromos.length > 0 && (
                   <View style={styles.promoSuggestions}>
-                    <Text style={styles.suggestionsTitle}>Suggested for you:</Text>
-                    {getSuggestedPromos().map((promo) => (
+                    <View style={styles.suggestionsHeader}>
+                      <Text style={styles.suggestionsTitle}>
+                        Available Offers
+                      </Text>
                       <TouchableOpacity
-                        key={promo.code}
+                        onPress={() => setShowPromoSuggestions(false)}
+                      >
+                        <Ionicons
+                          name="chevron-up"
+                          size={16}
+                          color={theme.colors.text.secondary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {suggestedPromos.map((promo) => (
+                      <TouchableOpacity
+                        key={promo.id}
                         style={styles.promoSuggestion}
                         onPress={() => handlePromoSuggestion(promo)}
                       >
                         <View style={styles.promoSuggestionContent}>
-                          <Text style={styles.promoSuggestionCode}>{promo.code}</Text>
-                          <Text style={styles.promoSuggestionDesc}>{promo.description}</Text>
+                          <Text style={styles.promoSuggestionCode}>
+                            {promo.offer_code}
+                          </Text>
+                          <Text style={styles.promoSuggestionDesc}>
+                            {promo.offer_percentage
+                              ? `${promo.offer_percentage}% OFF`
+                              : `£${promo.offer_price} OFF`}
+                            {promo.minimum_order &&
+                              ` on orders above £${promo.minimum_order}`}
+                          </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={theme.colors.text.tertiary} />
+                        <Ionicons
+                          name="chevron-forward"
+                          size={20}
+                          color={theme.colors.text.secondary}
+                        />
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
-              </View>
-            ) : (
-              <View style={styles.appliedPromoContainer}>
-                <View style={styles.appliedPromoContent}>
-                  <Ionicons name="checkmark-circle" size={20} color={theme.colors.status.success} />
-                  <View style={styles.appliedPromoInfo}>
-                    <Text style={styles.appliedPromoCode}>{appliedPromo.code}</Text>
-                    <Text style={styles.appliedPromoDesc}>{appliedPromo.description}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.removePromoButton} onPress={handleRemovePromo}>
-                  <Ionicons name="close" size={16} color={theme.colors.status.error} />
-                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -302,43 +735,155 @@ const Checkout = () => {
           {/* Order Summary */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Order Summary</Text>
-            <View style={styles.summaryCard}>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>£{subtotal.toFixed(2)}</Text>
+            </View>
+
+            {promoDiscount > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal</Text>
-                <Text style={styles.summaryValue}>{formattedPrice}</Text>
+                <Text style={[styles.summaryLabel, styles.discountLabel]}>
+                  Discount
+                </Text>
+                <Text style={[styles.summaryValue, styles.discountValue]}>
+                  -£{promoDiscount.toFixed(2)}
+                </Text>
               </View>
-              {appliedPromo && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, styles.discountLabel]}>Discount ({appliedPromo.code})</Text>
-                  <Text style={[styles.summaryValue, styles.discountValue]}>-£{promoDiscount.toFixed(2)}</Text>
-                </View>
-              )}
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                <Text style={styles.summaryValue}>£{deliveryFee.toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>VAT (20%)</Text>
-                <Text style={styles.summaryValue}>£{vatAmount.toFixed(2)}</Text>
-              </View>
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>£{totalAmount.toFixed(2)}</Text>
-              </View>
+            )}
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Delivery Fee</Text>
+              <Text style={styles.summaryValue}>£{deliveryFee.toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>VAT (20%)</Text>
+              <Text style={styles.summaryValue}>£{vatAmount.toFixed(2)}</Text>
+            </View>
+
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>£{totalAmount.toFixed(2)}</Text>
             </View>
           </View>
+
+          {/* Spacing for bottom button */}
+          <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Place Order Button */}
+        {/* Bottom Section with Place Order Button */}
         <View style={styles.bottomSection}>
           <TouchableOpacity
-            style={styles.placeOrderButton}
+            style={[
+              styles.placeOrderButton,
+              (placing || processingPayment) && styles.placeOrderButtonDisabled,
+            ]}
             onPress={handlePlaceOrder}
+            disabled={placing || processingPayment}
           >
-            <Text style={styles.placeOrderText}>Place Order</Text>
-            <Text style={styles.placeOrderPrice}>£{totalAmount.toFixed(2)}</Text>
+            {placing || processingPayment ? (
+              <ActivityIndicator size="small" color={theme.colors.text.white} />
+            ) : (
+              <>
+                <Text style={styles.placeOrderText}>
+                  {selectedPaymentMethod === "card" ? "Pay Now" : "Place Order"}
+                </Text>
+                <Text style={styles.placeOrderPrice}>
+                  £{totalAmount.toFixed(2)}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
+
+        {/* Address Selection Modal */}
+        <Modal
+          visible={showAddressModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowAddressModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAddressModal(false)}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Address</Text>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setShowAddressModal(false)}
+                >
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={theme.colors.text.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+              {/* {
+  console.log("Addresses in Modal:", addresses)
+} */}
+              <ScrollView style={styles.addressList}>
+                {addresses.map((address) => (
+                  <TouchableOpacity
+                    key={address.id}
+                    style={[
+                      styles.addressOption,
+                      selectedAddress?.id === address.id &&
+                        styles.selectedAddressOption,
+                    ]}
+                    onPress={() => handleSelectAddress(address)}
+                  >
+                    <View style={styles.addressOptionContent}>
+                      <Ionicons
+                        name="location"
+                        size={20}
+                        color={
+                          selectedAddress?.id === address.id
+                            ? theme.colors.primary.main
+                            : theme.colors.text.secondary
+                        }
+                      />
+                      <View style={styles.addressOptionText}>
+                        <Text style={styles.addressOptionTitle}>
+                          {address.address1}
+                        </Text>
+                        <Text style={styles.addressOptionAddress}>
+                          {address.address2}, {address.city}
+                        </Text>
+                      </View>
+                    </View>
+                    {selectedAddress?.id === address.id && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={theme.colors.primary.main}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.addNewAddressButton}
+                  onPress={() => {
+                    setShowAddressModal(false);
+                    router.push("/address-management");
+                  }}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={24}
+                    color={theme.colors.primary.main}
+                  />
+                  <Text style={styles.addNewAddressText}>Add New Address</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </SafeAreaWrapper>
   );
@@ -349,12 +894,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background.primary,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+  },
 
   // Header Styles
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
@@ -365,118 +921,136 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: theme.borderRadius.lg,
     backgroundColor: theme.colors.surface.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontFamily: 'Outfit-SemiBold',
+    fontSize: theme.typography.fontSize["2xl"],
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
   },
-  placeholder: {
-    width: 40,
-    height: 40,
+
+  // Scroll View Styles
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: theme.spacing["4xl"],
   },
 
   // Section Styles
   section: {
     paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
+    paddingVertical: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.surface.divider,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: theme.spacing.md,
   },
   sectionTitle: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
-    marginBottom: theme.spacing.lg,
+  },
+  changeText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Medium",
+    color: theme.colors.primary.main,
+  },
+  itemCount: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
   },
 
-  // Address Styles
+  // Address Card Styles
   addressCard: {
+    flexDirection: "row",
     backgroundColor: theme.colors.surface.card,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
   },
-  addressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: theme.spacing.sm,
+  addressIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: theme.spacing.md,
+  },
+  addressInfo: {
+    flex: 1,
   },
   addressType: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
-    marginLeft: theme.spacing.sm,
+    marginBottom: theme.spacing.xs / 2,
   },
   addressText: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.secondary,
-    lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.relaxed,
-    marginBottom: theme.spacing.md,
-  },
-  changeButton: {
-    alignSelf: 'flex-start',
-  },
-  changeButtonText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.primary.main,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  addressCity: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
   },
 
-  // Cart Item Styles
-  cartItem: {
-    flexDirection: 'row',
-    backgroundColor: theme.colors.surface.card,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.surface.border,
+  // Order Items Styles
+  orderItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.surface.divider,
   },
-  productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.surface.light,
+  orderItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: theme.borderRadius.md,
+    marginRight: theme.spacing.md,
   },
-  itemDetails: {
+  orderItemInfo: {
     flex: 1,
-    marginLeft: theme.spacing.md,
-    justifyContent: 'space-between',
   },
-  productName: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-  },
-  productUnit: {
+  orderItemName: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Medium",
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  orderItemDetails: {
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
-  quantityPrice: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quantityText: {
+  orderItemTotal: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.secondary,
-  },
-  itemPrice: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
+  },
+  moreItems: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+    marginTop: theme.spacing.sm,
+    textAlign: "center",
   },
 
   // Payment Method Styles
   paymentMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: theme.colors.surface.card,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
@@ -485,48 +1059,13 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
   selectedPaymentMethod: {
-    borderColor: theme.colors.secondary.main,
+    borderColor: theme.colors.primary.main,
     backgroundColor: theme.colors.primary[50],
   },
-  codPaymentMethod: {
-    borderColor: theme.colors.status.success,
-  },
-  paymentMethodIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.surface.light,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  codIcon: {
-    backgroundColor: theme.colors.status.success + '20',
-  },
   paymentMethodContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
-  },
-  paymentMethodInfo: {
-    marginLeft: theme.spacing.md,
-    flex: 1,
-  },
-  paymentMethodName: {
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs / 2,
-  },
-  paymentMethodDetails: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Medium',
-    color: theme.colors.secondary.main,
-    marginBottom: theme.spacing.xs / 2,
-  },
-  paymentMethodDescription: {
-    fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
-    color: theme.colors.text.tertiary,
   },
   radioButton: {
     width: 20,
@@ -534,41 +1073,84 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: theme.colors.surface.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: theme.spacing.md,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  selectedRadioButton: {
+  radioButtonSelected: {
     borderColor: theme.colors.primary.main,
   },
   radioButtonInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: theme.colors.primary.main,
   },
+  paymentIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface.light,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: theme.spacing.md,
+  },
+  paymentMethodInfo: {
+    flex: 1,
+  },
+  paymentMethodName: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  paymentMethodDetails: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+  },
 
-  // Summary Styles
-  summaryCard: {
-    backgroundColor: theme.colors.surface.card,
+  // Payment Info Card
+  paymentInfoCard: {
+    backgroundColor: theme.colors.status.success + "15",
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     borderWidth: 1,
-    borderColor: theme.colors.surface.border,
+    borderColor: theme.colors.status.success + "30",
   },
+  paymentInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: theme.spacing.sm,
+  },
+  paymentInfoTitle: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.status.success,
+    marginLeft: theme.spacing.sm,
+  },
+  paymentInfoText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+    lineHeight: 20,
+  },
+
+  // Order Summary Styles
   summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: theme.spacing.sm,
   },
   summaryLabel: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
   summaryValue: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
   },
   totalRow: {
@@ -580,12 +1162,12 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.primary,
   },
   totalValue: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.primary.main,
   },
 
@@ -595,25 +1177,29 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.lg,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surface.border,
+    backgroundColor: theme.colors.background.primary,
   },
   placeOrderButton: {
     backgroundColor: theme.colors.primary.main,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: theme.spacing.xl,
     paddingVertical: theme.spacing.lg,
     borderRadius: theme.borderRadius.lg,
     height: 56,
   },
+  placeOrderButtonDisabled: {
+    opacity: 0.6,
+  },
   placeOrderText: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.white,
   },
   placeOrderPrice: {
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.white,
   },
 
@@ -626,9 +1212,9 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface.border,
   },
   promoInputContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.md,
   },
   promoInput: {
     flex: 1,
@@ -637,7 +1223,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.primary,
     borderWidth: 1,
     borderColor: theme.colors.surface.border,
@@ -647,8 +1233,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     borderRadius: theme.borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     minWidth: 70,
   },
   applyButtonDisabled: {
@@ -656,24 +1242,43 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.text.white,
   },
+  viewPromosButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  viewPromosText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Medium",
+    color: theme.colors.primary.main,
+    marginRight: theme.spacing.xs,
+  },
   promoSuggestions: {
+    marginTop: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surface.divider,
     paddingTop: theme.spacing.md,
   },
-  suggestionsTitle: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
-    color: theme.colors.text.primary,
+  suggestionsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: theme.spacing.sm,
   },
+  suggestionsTitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.text.primary,
+  },
   promoSuggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     backgroundColor: theme.colors.surface.light,
@@ -687,28 +1292,28 @@ const styles = StyleSheet.create({
   },
   promoSuggestionCode: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.secondary.main,
     marginBottom: theme.spacing.xs / 2,
   },
   promoSuggestionDesc: {
     fontSize: theme.typography.fontSize.xs,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
   appliedPromoContainer: {
-    backgroundColor: theme.colors.status.success + '20',
+    backgroundColor: theme.colors.status.success + "20",
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     borderWidth: 1,
     borderColor: theme.colors.status.success,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   appliedPromoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   appliedPromoInfo: {
@@ -716,13 +1321,13 @@ const styles = StyleSheet.create({
   },
   appliedPromoCode: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
     color: theme.colors.status.success,
     marginBottom: theme.spacing.xs / 2,
   },
   appliedPromoDesc: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'Outfit-Regular',
+    fontFamily: "Outfit-Regular",
     color: theme.colors.text.secondary,
   },
   removePromoButton: {
@@ -733,7 +1338,99 @@ const styles = StyleSheet.create({
   },
   discountValue: {
     color: theme.colors.status.success,
-    fontFamily: 'Outfit-SemiBold',
+    fontFamily: "Outfit-SemiBold",
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: theme.colors.background.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: theme.colors.background.primary,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+    paddingTop: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing["4xl"],
+    maxHeight: "80%",
+    height: "80%", // ADD THIS - gives modal explicit height
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: theme.spacing.lg,
+  },
+  modalTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.text.primary,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface.light,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addressList: {
+    flexGrow: 1,
+  },
+  addressOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: theme.colors.surface.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.surface.border,
+  },
+  selectedAddressOption: {
+    borderColor: theme.colors.primary.main,
+    backgroundColor: theme.colors.primary[50],
+  },
+  addressOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  addressOptionText: {
+    marginLeft: theme.spacing.md,
+    flex: 1,
+  },
+  addressOptionTitle: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  addressOptionAddress: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: "Outfit-Regular",
+    color: theme.colors.text.secondary,
+  },
+  addNewAddressButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface.light,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.primary.main,
+    borderStyle: "dashed",
+  },
+  addNewAddressText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: "Outfit-SemiBold",
+    color: theme.colors.primary.main,
+    marginLeft: theme.spacing.sm,
   },
 });
 
